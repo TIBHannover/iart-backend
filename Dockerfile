@@ -6,14 +6,14 @@ RUN DEBIAN_FRONTEND=noninteractive apt install python3-pip npm -y
 
 RUN pip install poetry
 
-COPY poetry.lock /pyproject.toml /src /web/
-COPY /indexer/poetry.lock /indexer/pyproject.toml /indexer/src /web/indexer/
+COPY poetry.lock /pyproject.toml /src /api/
+COPY /indexer/poetry.lock /indexer/pyproject.toml /indexer/src /api/indexer/
 
 
-RUN cd /web; pip install ./indexer
-RUN cd /web; poetry export -f requirements.txt --output requirements.txt
+RUN cd /api; pip install ./indexer
+RUN cd /api; poetry export -f requirements.txt --output requirements.txt
 
-RUN cd /web; pip install -r requirements.txt
+RUN cd /api; pip install -r requirements.txt
 
 
 #COPY /indexer/pyproject.toml /indexer/src /indexer/
