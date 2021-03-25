@@ -116,7 +116,6 @@ dmypy.json
 .pyre/
 media/
 package-lock.json
-poetry.lock
 node_modules/
 jsconfig.json
 user_settings.py
