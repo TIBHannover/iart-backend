@@ -25,7 +25,7 @@ SECRET_KEY = "wrmnr_)ffvihaem(^1vf4*&^n3mthvi-x$74kco07azh0-feb5"
 DEBUG = True
 
 # FORCE_SCRIPT_NAME = "/"
-FORCE_SCRIPT_NAME = "/api/"
+FORCE_SCRIPT_NAME = "/"
 
 ALLOWED_HOSTS = [
     "iart21.labs.tib.eu",
@@ -43,7 +43,12 @@ CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False
 # Application definition
 
+CORS_ORIGIN_ALLOW_ALL = True
+
+
 INSTALLED_APPS = [
+    "rest_framework",
+    "corsheaders",
     "frontend",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -54,6 +59,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -127,11 +133,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
 
-VUE_PATH = os.path.join(BASE_DIR, "..", "vue","dist")
 
-STATICFILES_DIRS = [VUE_PATH]
+STATICFILES_DIRS = []
 
-STATIC_URL = "/vue/"
+STATIC_URL = FORCE_SCRIPT_NAME + "/static/"
 
 # MEDIA_ROOT = os.path.join(os.path.dirname(__file__), "..", "media")
 
