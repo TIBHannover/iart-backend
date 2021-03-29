@@ -205,12 +205,15 @@ def aggregate_view(request):
 
 
 def parse_search_request(request):
-    print(request)
     grpc_request = indexer_pb2.SearchRequest()
     if "data" in request:
         term = grpc_request.terms.add()
         term.text.field = "origin.name"
         term.text.query = request["data"]
+    if "aggregate" in request:
+        for field_name in request["aggregate"]:
+            grpc_request.aggregate.fields.extend([field_name])
+            grpc_request.aggregate.size = 250
 
     # print("BUILD QUERY")
     # for q in request["queries"]:
@@ -273,6 +276,7 @@ def parse_search_request(request):
 def rpc_load(query):
 
     grpc_request = parse_search_request(query)
+    print(grpc_request)
 
     host = settings.GRPC_HOST  # "localhost"
     port = settings.GRPC_PORT  # 50051
@@ -318,7 +322,15 @@ def rpc_check_load(job_id):
 
             entry["path"] = media_url_to_preview(e.id)
             entries.append(entry)
-        return {"status": "ok", "entries": entries, "state": "done"}
+
+        aggregations = []
+        for e in response.aggregate:
+            aggr = {"field": e.field_name, "entries": []}
+            for x in e.entries:
+                aggr["entries"].append({"name": x.key, "count": x.int_val})
+
+            aggregations.append(aggr)
+        return {"status": "ok", "entries": entries, "aggregations": aggregations, "state": "done"}
     except grpc.RpcError as e:
 
         # search is still running
