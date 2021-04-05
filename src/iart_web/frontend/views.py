@@ -204,18 +204,82 @@ def aggregate_view(request):
     return JsonResponse({"status": "ok", "job_id": response.id})
 
 
+# a = {
+#     "params": {
+#         "data": "rijksmuseum",
+#         "query": [{"type": "txt", "positive": True, "value": "Horse"}],
+#         "random": None,
+#         "filters": {},
+#         "date_range": [],
+#         "aggregate": [
+#             "meta",
+#             "meta.depicts",
+#             "meta.genre",
+#             "meta.location",
+#             "meta.medium",
+#             "meta.bject_type",
+#             "meta.institution",
+#             "meta.artist_name",
+#             "origin.name",
+#         ],
+#     }
+# }
+
+
 def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
     if "data" in request:
         term = grpc_request.terms.add()
         term.text.field = "origin.name"
         term.text.query = request["data"]
+
+    if "filters" in request:
+        for k, v in request["filters"].items():
+            if not isinstance(v,(list,set)):
+                v = [v]
+            for t in v:
+                term = grpc_request.terms.add()
+                term.text.field = f"meta.{k}"
+                term.text.query = t
+
     if "aggregate" in request:
         for field_name in request["aggregate"]:
             grpc_request.aggregate.fields.extend([field_name])
             grpc_request.aggregate.size = 250
 
-    # print("BUILD QUERY")
+    if "query" in request:
+        for q in request["query"]:
+            if "type" in q and q["type"] == "txt":
+
+                term = grpc_request.terms.add()
+                # TODO add support for other plugins
+                term.image_text.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
+                term.image_text.query = q["value"]
+                if "positive" in q and not q["positive"]:
+                    term.image_text.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
+                else:
+                    term.image_text.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
+
+            if "type" in q and q["type"] == "idx":
+
+                term = grpc_request.terms.add()
+                # TODO add support for other plugins
+                term.feature.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
+                term.feature.image.id = q["value"]
+                if "positive" in q and not q["positive"]:
+                    term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
+                else:
+                    term.feature.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
+
+            grpc_request.sorting = "feature"
+
+    if "random" in request:
+        if isinstance(request["random"],(int,float, str)):
+            grpc_request.sorting = "random"
+    # pry = q["query"]
+    #         if type_req.lower() == "annotations":
+    #             term = request.terms.add()
+    #             term.classifieint("BUILD QUERY")
     # for q in request["queries"]:
     #     print(q)
 
@@ -227,10 +291,7 @@ def parse_search_request(request):
     #         term = request.terms.add()
     #         if type_req.lower() == "meta":
     #             term = request.terms.add()
-    #             term.meta.query = q["query"]
-    #         if type_req.lower() == "annotations":
-    #             term = request.terms.add()
-    #             term.classifier.query = q["query"]
+    #             term.meta.querr.query = q["query"]
     #             request.sorting = "classifier"
 
     #     elif "query" in q and q["query"] is not None:
@@ -267,10 +328,6 @@ def parse_search_request(request):
     #     request.mapping = "umap"
 
     return grpc_request
-    # response = stub.search(request)
-
-    # return JsonResponse({"status": "ok", "job_id": response.id})
-    # pass
 
 
 def rpc_load(query):
