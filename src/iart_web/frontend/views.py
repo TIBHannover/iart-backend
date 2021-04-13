@@ -240,7 +240,7 @@ def parse_search_request(request):
     if "data" in request:
         term = grpc_request.terms.add()
         term.text.field = "origin.name"
-        term.text.query = "artigo"  # request["data"]
+        term.text.query = request["data"]
 
     if "filters" in request:
         for k, v in request["filters"].items():
