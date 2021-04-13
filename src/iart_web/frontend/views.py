@@ -228,14 +228,23 @@ def aggregate_view(request):
 
 def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
+
+    # delete me
+
+    term = grpc_request.terms.add()
+    term.number.field = "meta.yaer_max"
+    term.number.int_query = 1952
+    term.number.relation = indexer_pb2.NumberSearchTerm.EQ
+    term.number.flag = indexer_pb2.NumberSearchTerm.MUST
+
     if "data" in request:
         term = grpc_request.terms.add()
         term.text.field = "origin.name"
-        term.text.query = request["data"]
+        term.text.query = "artigo"  # request["data"]
 
     if "filters" in request:
         for k, v in request["filters"].items():
-            if not isinstance(v,(list,set)):
+            if not isinstance(v, (list, set)):
                 v = [v]
             for t in v:
                 term = grpc_request.terms.add()
@@ -274,7 +283,7 @@ def parse_search_request(request):
             grpc_request.sorting = "feature"
 
     if "random" in request:
-        if isinstance(request["random"],(int,float, str)):
+        if isinstance(request["random"], (int, float, str)):
             grpc_request.sorting = "random"
     # pry = q["query"]
     #         if type_req.lower() == "annotations":
