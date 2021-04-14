@@ -2,18 +2,14 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.conf import settings
 
-# Create your models here.
+
 class Image(models.Model):
-    # question_text = models.CharField(max_length=200)
-    # hash_1 = models.CharField(max_length=200)
     hash_id = models.CharField(max_length=256)
     width = models.IntegerField()
     height = models.IntegerField()
     visible = models.CharField(max_length=2, choices=[("V", "Visible"), ("U", "User")], default="U")
 
     def url_original(self):
-
-        # todo
         return settings.MEDIA_URL + self.hash_id[0:2] + "/" + self.hash_id[2:4] + "/" + self.hash_id + ".jpg"
 
     def url_thumbnail(self):
@@ -37,8 +33,6 @@ class ImageUserTag(models.Model):
 
 
 class Collection(models.Model):
-    # question_text = models.CharField(max_length=200)
-    # hash_1 = models.CharField(max_length=200)
     hash_id = models.CharField(max_length=256)
     width = models.IntegerField()
     height = models.IntegerField()

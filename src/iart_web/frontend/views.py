@@ -204,34 +204,13 @@ def aggregate_view(request):
     return JsonResponse({"status": "ok", "job_id": response.id})
 
 
-# a = {
-#     "params": {
-#         "data": "rijksmuseum",
-#         "query": [{"type": "txt", "positive": True, "value": "Horse"}],
-#         "random": None,
-#         "filters": {},
-#         "date_range": [],
-#         "aggregate": [
-#             "meta",
-#             "meta.depicts",
-#             "meta.genre",
-#             "meta.location",
-#             "meta.medium",
-#             "meta.bject_type",
-#             "meta.institution",
-#             "meta.artist_name",
-#             "origin.name",
-#         ],
-#     }
-# }
-
-
 def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
 
     if "data" in request:
         term = grpc_request.terms.add()
         term.text.field = "origin.name"
+        # term.text.query = request["data"]
         term.text.query = request["data"]
 
     if "filters" in request:
@@ -311,6 +290,7 @@ def parse_search_request(request):
 
             grpc_request.sorting = "feature"
 
+    # TODO use seed from user
     if "random" in request:
         if isinstance(request["random"], (int, float, str)):
             grpc_request.sorting = "random"
@@ -372,7 +352,9 @@ def rpc_check_load(job_id):
             entries.append(entry)
 
         aggregations = []
+        print("################# aggregations")
         for e in response.aggregate:
+            print(e.field_name)
             aggr = {"field": e.field_name, "entries": []}
             for x in e.entries:
                 aggr["entries"].append({"name": x.key, "count": x.int_val})
