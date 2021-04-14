@@ -229,14 +229,6 @@ def aggregate_view(request):
 def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
 
-    # delete me
-
-    term = grpc_request.terms.add()
-    term.number.field = "meta.yaer_max"
-    term.number.int_query = 1952
-    term.number.relation = indexer_pb2.NumberSearchTerm.EQ
-    term.number.flag = indexer_pb2.NumberSearchTerm.MUST
-
     if "data" in request:
         term = grpc_request.terms.add()
         term.text.field = "origin.name"
@@ -251,6 +243,23 @@ def parse_search_request(request):
                 term.text.field = f"meta.{k}"
                 term.text.query = t
 
+    if "date_range" in request and request["date_range"]:
+        date_range = request["date_range"]
+        if not isinstance(date_range, (list, set)):
+            date_range = [date_range]
+        if len(date_range) > 1:
+            term = grpc_request.terms.add()
+            term.number.field = "meta.yaer_max"
+            term.number.int_query = max(date_range)
+            term.number.flag = indexer_pb2.NumberSearchTerm.MUST
+            term.number.relation = indexer_pb2.NumberSearchTerm.LESS_EQ
+
+        term = grpc_request.terms.add()
+        term.number.field = "meta.year_min"
+        term.number.int_query = date_range[0]
+        term.number.flag = indexer_pb2.NumberSearchTerm.MUST
+        term.number.relation = indexer_pb2.NumberSearchTerm.GREATER_EQ
+
     if "aggregate" in request:
         for field_name in request["aggregate"]:
             grpc_request.aggregate.fields.extend([field_name])
@@ -261,9 +270,19 @@ def parse_search_request(request):
             if "type" in q and q["type"] == "txt":
 
                 term = grpc_request.terms.add()
-                # TODO add support for other plugins
-                term.image_text.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
                 term.image_text.query = q["value"]
+                if "weights" in q:
+                    plugins = q["weights"]
+                    if not isinstance(plugins, (list, set)):
+                        plugins = [plugins]
+                    for p in plugins:
+                        for k, v in p.items():
+                            plugins = term.feature.plugins.add()
+                            plugins.name = k.lower()
+                            plugins.weight = v
+                else:
+                    term.image_text.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
+
                 if "positive" in q and not q["positive"]:
                     term.image_text.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
                 else:
@@ -272,9 +291,19 @@ def parse_search_request(request):
             if "type" in q and q["type"] == "idx":
 
                 term = grpc_request.terms.add()
-                # TODO add support for other plugins
-                term.feature.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
                 term.feature.image.id = q["value"]
+                if "weights" in q:
+                    plugins = q["weights"]
+                    if not isinstance(plugins, (list, set)):
+                        plugins = [plugins]
+                    for p in plugins:
+                        for k, v in p.items():
+                            plugins = term.feature.plugins.add()
+                            plugins.name = k.lower()
+                            plugins.weight = v
+                else:
+                    term.feature.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
+
                 if "positive" in q and not q["positive"]:
                     term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
                 else:
@@ -285,56 +314,9 @@ def parse_search_request(request):
     if "random" in request:
         if isinstance(request["random"], (int, float, str)):
             grpc_request.sorting = "random"
-    # pry = q["query"]
-    #         if type_req.lower() == "annotations":
-    #             term = request.terms.add()
-    #             term.classifieint("BUILD QUERY")
-    # for q in request["queries"]:
-    #     print(q)
 
-    #     if "type" in q and q["type"] is not None:
-    #         type_req = q["type"]
-    #         if not isinstance(type_req, str):
-    #             return JsonResponse({"status": "error"})
-
-    #         term = request.terms.add()
-    #         if type_req.lower() == "meta":
-    #             term = request.terms.add()
-    #             term.meta.querr.query = q["query"]
-    #             request.sorting = "classifier"
-
-    #     elif "query" in q and q["query"] is not None:
-    #         term = request.terms.add()
-    #         term.meta.query = q["query"]
-
-    #         term = request.terms.add()
-    #         term.classifier.query = q["query"]
-
-    #     if "reference" in q and q["reference"] is not None:
-    #         request.sorting = "feature"
-
-    #         term = request.terms.add()
-    #         # TODO use a database for this case
-    #         if os.path.exists(upload_path_to_image(q["reference"])):
-    #             term.feature.image.encoded = open(upload_path_to_image(q["reference"]), "rb").read()
-    #         else:
-    #             term.feature.image.id = q["reference"]
-
-    #         if "features" in q:
-    #             plugins = q["features"]
-    #             if not isinstance(q["features"], (list, set)):
-    #                 plugins = [q["features"]]
-    #             for p in plugins:
-    #                 for k, v in p.items():
-    #                     plugins = term.feature.plugins.add()
-    #                     plugins.name = k.lower()
-    #                     plugins.weight = v
-
-    # if "sorting" in data and data["sorting"] == "random":
-    #     request.sorting = "random"
-
-    # if "mapping" in data and data["mapping"] == "umap":
-    #     request.mapping = "umap"
+    if "settings" in request and request["settings"].get("layout") == "umap":
+        grpc_request.mapping = "umap"
 
     return grpc_request
 
@@ -577,6 +559,7 @@ def search_result_view(request):
     return JsonResponse({"status": "error"})
 
 
+@csrf_exempt
 def upload(request):
     try:
         if request.method != "POST":
