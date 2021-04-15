@@ -63,18 +63,13 @@ def upload_path_to_image(id):
 def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
 
-    if "data" in request:
-        term = grpc_request.terms.add()
-        term.text.field = "origin.name"
-        term.text.query = request["data"]
-
     if "filters" in request:
         for k, v in request["filters"].items():
             if not isinstance(v, (list, set)):
                 v = [v]
             for t in v:
                 term = grpc_request.terms.add()
-                term.text.field = f"meta.{k}"
+                term.text.field = k
                 term.text.query = t
 
     if "date_range" in request and request["date_range"]:
@@ -90,7 +85,7 @@ def parse_search_request(request):
 
         term = grpc_request.terms.add()
         term.number.field = "meta.year_min"
-        term.number.int_query = date_range[0]
+        term.number.int_query = min(date_range)
         term.number.flag = indexer_pb2.NumberSearchTerm.MUST
         term.number.relation = indexer_pb2.NumberSearchTerm.GREATER_EQ
 
