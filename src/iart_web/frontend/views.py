@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 import imageio
 import numpy as np
+import traceback
 
 from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse, Http404
@@ -59,159 +60,8 @@ def upload_path_to_image(id):
     return os.path.join(settings.UPLOAD_ROOT, id[0:2], id[2:4], id + ".jpg")
 
 
-def autocomplete_view(request):
-    # if not request.is_ajax():
-    # return Http404()
-
-    try:
-        body = request.body.decode("utf-8")
-    except (UnicodeDecodeError, AttributeError):
-        body = request.body
-
-    try:
-        data = json.loads(body)
-    except Exception as e:
-        print("Search: JSON error: {}".format(e))
-        return JsonResponse({"status": "error"})
-
-    if "query" not in data:
-        # TODO error
-        return JsonResponse({"status": "error"})
-
-    query = data["query"]
-
-    host = settings.GRPC_HOST  # "localhost"
-    port = settings.GRPC_PORT  # 50051
-    channel = grpc.insecure_channel(
-        "{}:{}".format(host, port),
-        options=[
-            ("grpc.max_send_message_length", 50 * 1024 * 1024),
-            ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-        ],
-    )
-
-    stub = indexer_pb2_grpc.IndexerStub(channel)
-    request = indexer_pb2.SuggestRequest(query=query)
-    response = stub.suggest(request)
-    print(response)
-    context = {"status": "ok", "suggestions": suggestions_from_proto(response)}
-
-    return JsonResponse(context)
-
-
-def list_feature_view(request):
-
-    host = settings.GRPC_HOST  # "localhost"
-    port = settings.GRPC_PORT  # 50051
-
-    channel = grpc.insecure_channel(
-        "{}:{}".format(host, port),
-        options=[
-            ("grpc.max_send_message_length", 50 * 1024 * 1024),
-            ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-        ],
-    )
-    stub = indexer_pb2_grpc.IndexerStub(channel)
-    request = indexer_pb2.AggregateRequest(size=10, type="count", part="feature")
-    response = stub.aggregate(request)
-
-    return JsonResponse({"status": "ok", "features": [x.key for x in response.field if x.int_val > 0]})
-
-
-def aggregate_view(request):
-    #
-    # if not request.is_ajax():
-    #     return Http404()
-    try:
-        body = request.body.decode("utf-8")
-    except (UnicodeDecodeError, AttributeError):
-        body = request.body
-
-    try:
-        data = json.loads(body)
-    except Exception as e:
-        print("Search: JSON error: {}".format(e))
-        return JsonResponse({"status": "error"})
-
-    if "queries" not in data:
-        return JsonResponse({"status": "error"})
-
-    host = settings.GRPC_HOST  # "localhost"
-    port = settings.GRPC_PORT  # 50051
-
-    channel = grpc.insecure_channel(
-        "{}:{}".format(host, port),
-        options=[
-            ("grpc.max_send_message_length", 50 * 1024 * 1024),
-            ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-        ],
-    )
-    stub = indexer_pb2_grpc.IndexerStub(channel)
-    request = indexer_pb2.AggregateRequest()
-
-    for q in data["queries"]:
-        print(q)
-
-        if "type" in q and q["type"] is not None:
-            type_req = q["type"]
-            if not isinstance(type_req, str):
-                return JsonResponse({"status": "error"})
-
-            term = request.terms.add()
-            if type_req.lower() == "meta":
-                term = request.terms.add()
-                term.meta.query = q["query"]
-            if type_req.lower() == "annotations":
-                term = request.terms.add()
-                term.classifier.query = q["query"]
-                request.sorting = "classifier"
-
-        elif "query" in q and q["query"] is not None:
-            term = request.terms.add()
-            term.meta.query = q["query"]
-
-            term = request.terms.add()
-            term.classifier.query = q["query"]
-
-        if "reference" in q and q["reference"] is not None:
-            request.sorting = "feature"
-
-            term = request.terms.add()
-            # TODO use a database for this case
-            if os.path.exists(upload_path_to_image(q["reference"])):
-                term.feature.image.encoded = open(upload_path_to_image(q["reference"]), "rb").read()
-            else:
-                term.feature.image.id = q["reference"]
-
-            if "features" in q:
-                plugins = q["features"]
-                if not isinstance(q["features"], (list, set)):
-                    plugins = [q["features"]]
-                for p in plugins:
-                    for k, v in p.items():
-                        plugins = term.feature.plugins.add()
-                        plugins.name = k.lower()
-                        plugins.weight = v
-
-    if "sorting" in data and data["sorting"] == "random":
-        request.sorting = "random"
-
-    if "mapping" in data and data["mapping"] == "umap":
-        request.mapping = "umap"
-
-    response = stub.search(request)
-
-    return JsonResponse({"status": "ok", "job_id": response.id})
-
-
 def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
-
-    if "data" in request:
-        term = grpc_request.terms.add()
-        term.text.field = "origin.name"
-        # term.text.query = request["data"]
-        term.text.query = request["data"]
 
     if "filters" in request:
         for k, v in request["filters"].items():
@@ -219,7 +69,7 @@ def parse_search_request(request):
                 v = [v]
             for t in v:
                 term = grpc_request.terms.add()
-                term.text.field = f"meta.{k}"
+                term.text.field = k
                 term.text.query = t
 
     if "date_range" in request and request["date_range"]:
@@ -235,7 +85,7 @@ def parse_search_request(request):
 
         term = grpc_request.terms.add()
         term.number.field = "meta.year_min"
-        term.number.int_query = date_range[0]
+        term.number.int_query = min(date_range)
         term.number.flag = indexer_pb2.NumberSearchTerm.MUST
         term.number.relation = indexer_pb2.NumberSearchTerm.GREATER_EQ
 
@@ -398,155 +248,15 @@ def load(request):
     return JsonResponse(response)
 
 
-def search_view(request):
-    #
-    # if not request.is_ajax():
-    #     return Http404()
-    try:
-        body = request.body.decode("utf-8")
-    except (UnicodeDecodeError, AttributeError):
-        body = request.body
-
-    try:
-        data = json.loads(body)
-    except Exception as e:
-        print("Search: JSON error: {}".format(e))
-        return JsonResponse({"status": "error"})
-
-    if "queries" not in data:
-        return JsonResponse({"status": "error"})
-    host = settings.GRPC_HOST  # "localhost"
-    port = settings.GRPC_PORT  # 50051
-    print(f"Search: GRPC {host}:{port}")
-    channel = grpc.insecure_channel(
-        "{}:{}".format(host, port),
-        options=[
-            ("grpc.max_send_message_length", 50 * 1024 * 1024),
-            ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-        ],
-    )
-    stub = indexer_pb2_grpc.IndexerStub(channel)
-    request = indexer_pb2.SearchRequest()
-
-    print("BUILD QUERY")
-    for q in data["queries"]:
-        print(q)
-
-        if "type" in q and q["type"] is not None:
-            type_req = q["type"]
-            if not isinstance(type_req, str):
-                return JsonResponse({"status": "error"})
-
-            term = request.terms.add()
-            if type_req.lower() == "meta":
-                term = request.terms.add()
-                term.meta.query = q["query"]
-            if type_req.lower() == "annotations":
-                term = request.terms.add()
-                term.classifier.query = q["query"]
-                request.sorting = "classifier"
-
-        elif "query" in q and q["query"] is not None:
-            term = request.terms.add()
-            term.meta.query = q["query"]
-
-            term = request.terms.add()
-            term.classifier.query = q["query"]
-
-        if "reference" in q and q["reference"] is not None:
-            request.sorting = "feature"
-
-            term = request.terms.add()
-            # TODO use a database for this case
-            if os.path.exists(upload_path_to_image(q["reference"])):
-                term.feature.image.encoded = open(upload_path_to_image(q["reference"]), "rb").read()
-            else:
-                term.feature.image.id = q["reference"]
-
-            if "features" in q:
-                plugins = q["features"]
-                if not isinstance(q["features"], (list, set)):
-                    plugins = [q["features"]]
-                for p in plugins:
-                    for k, v in p.items():
-                        plugins = term.feature.plugins.add()
-                        plugins.name = k.lower()
-                        plugins.weight = v
-
-    if "sorting" in data and data["sorting"] == "random":
-        request.sorting = "random"
-
-    if "mapping" in data and data["mapping"] == "umap":
-        request.mapping = "umap"
-
-    response = stub.search(request)
-
-    return JsonResponse({"status": "ok", "job_id": response.id})
-
-
-def search_result_view(request):
-    #
-    # if not request.is_ajax():
-    #     return Http404()
-
-    try:
-        body = request.body.decode("utf-8")
-    except (UnicodeDecodeError, AttributeError):
-        body = request.body
-
-    try:
-        data = json.loads(body)
-    except Exception as e:
-        print("Search: JSON error: {}".format(e))
-        return JsonResponse({"status": "error"})
-
-    host = settings.GRPC_HOST  # "localhost"
-    port = settings.GRPC_PORT  # 50051
-    channel = grpc.insecure_channel(
-        "{}:{}".format(host, port),
-        options=[
-            ("grpc.max_send_message_length", 50 * 1024 * 1024),
-            ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-        ],
-    )
-    stub = indexer_pb2_grpc.IndexerStub(channel)
-
-    if "id" not in data:
-        return JsonResponse({"status": "error"})
-
-    request = indexer_pb2.ListSearchResultRequest(id=data["id"])
-
-    try:
-        response = stub.list_search_result(request)
-        entries = []
-        for e in response.entries:
-            entry = {"id": e.id}
-
-            entry["meta"] = meta_from_proto(e.meta)
-            entry["origin"] = meta_from_proto(e.origin)
-            entry["classifier"] = classifier_from_proto(e.classifier)
-            entry["feature"] = feature_from_proto(e.feature)
-            entry["coordinates"] = list(e.coordinates)
-
-            entry["path"] = media_url_to_preview(e.id)
-            print(entry)
-            entries.append(entry)
-        return JsonResponse({"status": "ok", "entries": entries})
-    except grpc.RpcError as e:
-
-        # search is still running
-        if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
-            return JsonResponse({"status": "running"})
-
-    return JsonResponse({"status": "error"})
-
-
 @csrf_exempt
 def upload(request):
+    print("#####################", flush=True)
+    print(request.FILES, flush=True)
     try:
         if request.method != "POST":
             return JsonResponse({"status": "error"})
 
+        image = None
         image_id = uuid.uuid4().hex
         title = ""
         if "file" in request.FILES:
@@ -576,4 +286,5 @@ def upload(request):
         return JsonResponse({"status": "error"})
     except Exception as e:
         print(e)
+        logging.error(traceback.format_exc())
         return JsonResponse({"status": "error"})
