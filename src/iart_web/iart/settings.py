@@ -36,18 +36,14 @@ ALLOWED_HOSTS = [
     "localhost",
 ]
 
-CSRF_TRUSTED_ORIGINS = [".tib.eu", "localhost", "127.0.0.1"]
-# CSRF_COOKIE_SECURE = False
-
-CSRF_USE_SESSIONS = False
-CSRF_COOKIE_HTTPONLY = False
-# Application definition
 
 CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
 
 
 INSTALLED_APPS = [
     "rest_framework",
+    "rest_framework.authtoken",
     "corsheaders",
     "frontend",
     "django.contrib.admin",
@@ -57,6 +53,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 ]
+
+REST_FRAMEWORK = {"DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework.authentication.SessionAuthentication",)}
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",

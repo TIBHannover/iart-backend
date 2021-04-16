@@ -220,7 +220,6 @@ def rpc_check_load(job_id):
     return {"status": "error", "state": "done"}
 
 
-@csrf_exempt
 def load(request):
     try:
         body = request.body.decode("utf-8")
@@ -248,7 +247,6 @@ def load(request):
     return JsonResponse(response)
 
 
-@csrf_exempt
 def upload(request):
     print("#####################", flush=True)
     print(request.FILES, flush=True)
