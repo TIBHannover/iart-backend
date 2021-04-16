@@ -7,7 +7,8 @@ urlpatterns = [
     path("load", views.load, name="load"),
     path("upload", views.upload, name="upload"),
     #
-    path("login/", user.login, name="login"),
-    path("logout/", user.logout, name="logout"),
-    path("signup/", user.signup, name="signup"),
+    path("get_csrf_token", user.get_csrf_token, name="get_csrf_token"),
+    path("login", user.login, name="login"),
+    path("logout", user.logout, name="logout"),
+    path("register", user.register, name="register"),
 ]

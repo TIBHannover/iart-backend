@@ -36,18 +36,14 @@ ALLOWED_HOSTS = [
     "localhost",
 ]
 
-CSRF_TRUSTED_ORIGINS = [".tib.eu", "localhost", "127.0.0.1"]
-# CSRF_COOKIE_SECURE = False
-
-CSRF_USE_SESSIONS = False
-CSRF_COOKIE_HTTPONLY = False
-# Application definition
 
 CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
 
 
 INSTALLED_APPS = [
     "rest_framework",
+    "rest_framework.authtoken",
     "corsheaders",
     "frontend",
     "django.contrib.admin",
@@ -57,6 +53,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 ]
+
+REST_FRAMEWORK = {"DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework.authentication.SessionAuthentication",)}
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -94,10 +92,15 @@ WSGI_APPLICATION = "iart.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "iart",
+        "USER": "postgres",
+        "PASSWORD": "postgres",
+        "HOST": "localhost",
+        "PORT": 5432,
     }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/2.1/ref/settings/#auth-password-validators

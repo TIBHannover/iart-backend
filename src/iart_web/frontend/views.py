@@ -140,6 +140,7 @@ def parse_search_request(request):
 
             grpc_request.sorting = "feature"
 
+    # TODO use seed from user
     if "random" in request:
         if isinstance(request["random"], (int, float, str)):
             grpc_request.sorting = "random"
@@ -201,7 +202,9 @@ def rpc_check_load(job_id):
             entries.append(entry)
 
         aggregations = []
+        print("################# aggregations")
         for e in response.aggregate:
+            print(e.field_name)
             aggr = {"field": e.field_name, "entries": []}
             for x in e.entries:
                 aggr["entries"].append({"name": x.key, "count": x.int_val})
@@ -217,7 +220,6 @@ def rpc_check_load(job_id):
     return {"status": "error", "state": "done"}
 
 
-@csrf_exempt
 def load(request):
     try:
         body = request.body.decode("utf-8")
@@ -245,7 +247,6 @@ def load(request):
     return JsonResponse(response)
 
 
-@csrf_exempt
 def upload(request):
     print("#####################", flush=True)
     print(request.FILES, flush=True)
