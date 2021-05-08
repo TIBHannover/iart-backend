@@ -62,6 +62,14 @@ def upload_path_to_image(id):
 
 def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
+    weights = {"clip_embedding_feature": 1}
+
+    if "settings" in request:
+        if request["settings"].get("layout") == "umap":
+            grpc_request.mapping = "umap"
+
+        if request["settings"].get("weights"):
+            weights = request["settings"]["weights"]
 
     if "filters" in request:
         for k, v in request["filters"].items():
@@ -110,7 +118,10 @@ def parse_search_request(request):
                             plugins.name = k.lower()
                             plugins.weight = v
                 else:
-                    term.image_text.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
+                    for k, v in weights.items():
+                        plugins = term.feature.plugins.add()
+                        plugins.name = k.lower()
+                        plugins.weight = v
 
                 if "positive" in q and not q["positive"]:
                     term.image_text.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
@@ -131,7 +142,10 @@ def parse_search_request(request):
                             plugins.name = k.lower()
                             plugins.weight = v
                 else:
-                    term.feature.plugins.extend([indexer_pb2.PluginRun(name="clip_embedding_feature", weight=1.0)])
+                    for k, v in weights.items():
+                        plugins = term.feature.plugins.add()
+                        plugins.name = k.lower()
+                        plugins.weight = v
 
                 if "positive" in q and not q["positive"]:
                     term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
@@ -144,9 +158,6 @@ def parse_search_request(request):
     if "random" in request:
         if isinstance(request["random"], (int, float, str)):
             grpc_request.sorting = "random"
-
-    if "settings" in request and request["settings"].get("layout") == "umap":
-        grpc_request.mapping = "umap"
 
     return grpc_request
 
