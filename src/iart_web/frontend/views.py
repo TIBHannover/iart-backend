@@ -131,7 +131,15 @@ def parse_search_request(request):
             if "type" in q and q["type"] == "idx":
 
                 term = grpc_request.terms.add()
-                term.feature.image.id = q["value"]
+                # check if image exists in upload folder
+                image_id = q["value"]
+                image_path = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg")
+                if os.path.exists(image_path):
+                    with open(image_path, "rb") as f:
+                        term.feature.image.encoded = f.read()
+                else:
+                    term.feature.image.id = q["value"]
+
                 if "weights" in q:
                     plugins = q["weights"]
                     if not isinstance(plugins, (list, set)):
