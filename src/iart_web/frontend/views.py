@@ -160,12 +160,14 @@ def parse_search_request(request):
                 else:
                     term.feature.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
 
-            grpc_request.sorting = "feature"
+            grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_FEATURE
 
     # TODO use seed from user
     if "random" in request:
         if isinstance(request["random"], (int, float, str)):
-            grpc_request.sorting = "random"
+            grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_RANDOM
+
+            grpc_request.random_seed = str(request["random"])
 
     return grpc_request
 
@@ -173,7 +175,6 @@ def parse_search_request(request):
 def rpc_load(query):
 
     grpc_request = parse_search_request(query)
-    print(grpc_request)
 
     host = settings.GRPC_HOST  # "localhost"
     port = settings.GRPC_PORT  # 50051
