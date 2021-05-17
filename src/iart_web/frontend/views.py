@@ -165,7 +165,9 @@ def parse_search_request(request):
     # TODO use seed from user
     if "random" in request:
         if isinstance(request["random"], (int, float, str)):
-            grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_RANDOM
+            # old behaviour
+            # grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_RANDOM
+            grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_RANDOM_FEATURE
 
             grpc_request.random_seed = str(request["random"])
 
@@ -302,6 +304,7 @@ def upload(request):
             )
 
         return JsonResponse({"status": "error"})
+
     except Exception as e:
         print(e)
         logging.error(traceback.format_exc())
