@@ -64,14 +64,14 @@ def parse_search_request(request):
     grpc_request = indexer_pb2.SearchRequest()
     weights = {"clip_embedding_feature": 1}
 
-    if "settings" in request:
+    if request.get("settings"):
         if request["settings"].get("layout") == "umap":
             grpc_request.mapping = "umap"
 
         if request["settings"].get("weights"):
             weights = request["settings"]["weights"]
 
-    if "filters" in request:
+    if request.get("filters"):
         for k, v in request["filters"].items():
             if not isinstance(v, (list, set)):
                 v = [v]
@@ -80,7 +80,12 @@ def parse_search_request(request):
                 term.text.field = k
                 term.text.query = t
 
-    if "date_range" in request and request["date_range"]:
+    if request.get("full_text"):
+        for v in request["full_text"]:
+            term = grpc_request.terms.add()
+            term.text.query = v
+
+    if request.get("date_range"):
         date_range = request["date_range"]
         if not isinstance(date_range, (list, set)):
             date_range = [date_range]
@@ -97,40 +102,36 @@ def parse_search_request(request):
         term.number.flag = indexer_pb2.NumberSearchTerm.MUST
         term.number.relation = indexer_pb2.NumberSearchTerm.GREATER_EQ
 
-    if "aggregate" in request:
+    if request.get("aggregate"):
         for field_name in request["aggregate"]:
             grpc_request.aggregate.fields.extend([field_name])
             grpc_request.aggregate.size = 250
 
-    if "query" in request:
+    if request.get("query"):
         for q in request["query"]:
-            if "type" in q and q["type"] == "txt":
-
+            if q.get("type") == "txt":
                 term = grpc_request.terms.add()
                 term.image_text.query = q["value"]
-                if "weights" in q:
-                    plugins = q["weights"]
-                    if not isinstance(plugins, (list, set)):
-                        plugins = [plugins]
-                    for p in plugins:
-                        for k, v in p.items():
-                            plugins = term.feature.plugins.add()
-                            plugins.name = k.lower()
-                            plugins.weight = v
+
+                if q.get("weights"):
+                    for k, v in q["weights"].items():
+                        plugins = term.feature.plugins.add()
+                        plugins.name = k.lower()
+                        plugins.weight = v
                 else:
                     for k, v in weights.items():
                         plugins = term.feature.plugins.add()
                         plugins.name = k.lower()
                         plugins.weight = v
 
-                if "positive" in q and not q["positive"]:
-                    term.image_text.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
+                if q.get("positive", True):
+                    term.feature.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
                 else:
-                    term.image_text.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
+                    term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
 
-            if "type" in q and q["type"] == "idx":
-
+            elif q.get("type") == "idx":
                 term = grpc_request.terms.add()
+
                 # check if image exists in upload folder
                 image_id = q["value"]
                 image_path = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg")
@@ -140,35 +141,29 @@ def parse_search_request(request):
                 else:
                     term.feature.image.id = q["value"]
 
-                if "weights" in q:
-                    plugins = q["weights"]
-                    if not isinstance(plugins, (list, set)):
-                        plugins = [plugins]
-                    for p in plugins:
-                        for k, v in p.items():
-                            plugins = term.feature.plugins.add()
-                            plugins.name = k.lower()
-                            plugins.weight = v
+                if q.get("weights"):
+                    for k, v in q["weights"].items():
+                        plugins = term.feature.plugins.add()
+                        plugins.name = k.lower()
+                        plugins.weight = v
                 else:
                     for k, v in weights.items():
                         plugins = term.feature.plugins.add()
                         plugins.name = k.lower()
                         plugins.weight = v
 
-                if "positive" in q and not q["positive"]:
-                    term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
-                else:
+                if q.get("positive", True):
                     term.feature.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
+                else:
+                    term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
 
             grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_FEATURE
 
-    # TODO use seed from user
-    if "random" in request:
+    if request.get("random"):
         if isinstance(request["random"], (int, float, str)):
             # old behaviour
             # grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_RANDOM
             grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_RANDOM_FEATURE
-
             grpc_request.random_seed = str(request["random"])
 
     return grpc_request
