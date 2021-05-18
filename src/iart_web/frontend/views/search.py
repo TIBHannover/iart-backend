@@ -91,6 +91,7 @@ class Search(View):
         if request.get("query"):
             for q in request["query"]:
                 if q.get("type") == "txt":
+                    print(q, flush=True)
                     term = grpc_request.terms.add()
                     term.image_text.query = q["value"]
 
@@ -98,13 +99,13 @@ class Search(View):
                     if q.get("weights"):
                         for k, v in q["weights"].items():
                             plugins_defined = True
-                            plugins = term.feature.plugins.add()
+                            plugins = term.image_text.plugins.add()
                             plugins.name = k.lower()
                             plugins.weight = v
                     else:
                         for k, v in weights.items():
                             plugins_defined = True
-                            plugins = term.feature.plugins.add()
+                            plugins = term.image_text.plugins.add()
                             plugins.name = k.lower()
                             plugins.weight = v
 
@@ -115,9 +116,9 @@ class Search(View):
                         plugins.weight = 1.0
 
                     if q.get("positive", True):
-                        term.feature.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
+                        term.image_text.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
                     else:
-                        term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
+                        term.image_text.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
 
                 elif q.get("type") == "idx":
                     term = grpc_request.terms.add()
