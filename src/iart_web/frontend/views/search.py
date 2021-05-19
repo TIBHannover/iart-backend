@@ -71,25 +71,9 @@ class Search(View):
                     term = grpc_request.terms.add()
                     term.image_text.query = q["value"]
 
-                    plugins_defined = False
-                    if q.get("weights"):
-                        for k, v in q["weights"].items():
-                            plugins_defined = True
-                            plugins = term.image_text.plugins.add()
-                            plugins.name = k.lower()
-                            plugins.weight = v
-                    else:
-                        for k, v in weights.items():
-                            plugins_defined = True
-                            plugins = term.image_text.plugins.add()
-                            plugins.name = k.lower()
-                            plugins.weight = v
-
-                    # Fallback if weights are defined but no plugins
-                    if not plugins_defined:
-                        plugins = term.image_text.plugins.add()
-                        plugins.name = "clip_embedding_feature"
-                        plugins.weight = 1.0
+                    plugins = term.image_text.plugins.add()
+                    plugins.name = "clip_embedding_feature"
+                    plugins.weight = 1.0
 
                     if q.get("positive", True):
                         term.image_text.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
