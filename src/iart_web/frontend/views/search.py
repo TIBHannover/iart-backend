@@ -10,7 +10,7 @@ from django.conf import settings
 
 if settings.INDEXER_PATH is not None:
     sys.path.append(settings.INDEXER_PATH)
-    print(sys.path)
+
 
 import grpc
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
