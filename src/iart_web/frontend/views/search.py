@@ -24,7 +24,9 @@ class Search(View):
 
         if request.get("settings"):
             if request["settings"].get("layout") == "umap":
-                grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_SCIPY
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
 
             if request["settings"].get("weights"):
                 weights = request["settings"]["weights"]
