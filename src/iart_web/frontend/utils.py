@@ -83,3 +83,118 @@ def download_file(file, output_dir, output_name=None, max_size=None, extensions=
             f.write(chunk)
 
     return {"status": "ok", "path": Path(output_path)}
+
+def unflat_dict(data_dict, parse_json=False):
+    result_map = {}
+    if parse_json:
+        data_dict_new = {}
+        for k, v in data_dict.items():
+            try:
+                data = json.loads(v)
+                data_dict_new[k] = data
+            except:
+                data_dict_new[k] = v
+        data_dict = data_dict_new
+    for k, v in data_dict.items():
+        path = k.split(".")
+        prev = result_map
+        for p in path[:-1]:
+            if p not in prev:
+                prev[p] = {}
+            prev = prev[p]
+        prev[path[-1]] = v
+    return result_map
+
+
+def flat_dict(data_dict, parse_json=False):
+    result_map = {}
+    for k, v in data_dict.items():
+        if isinstance(v, dict):
+            embedded = flat_dict(v)
+            for s_k, s_v in embedded.items():
+                s_k = f"{k}.{s_k}"
+                if s_k in result_map:
+                    logging.error(f"flat_dict: {s_k} alread exist in output dict")
+
+                result_map[s_k] = s_v
+            continue
+
+        if k not in result_map:
+            result_map[k] = []
+        result_map[k] = v
+    return result_map
+
+
+import tarfile
+import zipfile
+
+class Archive:
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+
+        pass
+
+    def __exit__(self):
+        pass
+
+class TarArchive(Archive):
+    def __init__(self, path):
+        self.path = path
+        self.f = None
+
+    def __enter__(self):
+        self.f = tarfile.open(self.path, mode='r')
+        return self
+    
+    def members(self):
+        if self.f is None:
+            return []
+        else:
+            for info in self.f.getmembers():
+                yield info.name
+
+    def read(self, name):
+        if self.f is None:
+            return None
+        
+        try:
+            return self.f.extractfile(name).read()
+        except KeyError:
+            return None
+
+    def __exit__(self ,type, value, traceback):
+        self.f.close()
+        self.f = None
+
+
+class ZipArchive(Archive):
+    def __init__(self, path):
+        self.path = path
+        self.f = None
+
+    def __enter__(self):
+        self.f = zipfile.ZipFile(self.path, 'r')
+        return self
+
+    def members(self):
+        if self.f is None:
+            return []
+        else:
+            for name in self.f.namelist():
+                yield name
+    
+
+    def read(self, name):
+        if self.f is None:
+            return None
+        
+        try:
+            return self.f.open(name).read()
+        except KeyError:
+            return None
+    
+    def __exit__(self ,type, value, traceback):
+        self.f.close()
+        self.f = None

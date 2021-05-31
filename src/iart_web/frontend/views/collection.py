@@ -19,7 +19,8 @@ import json
 from urllib.parse import urlparse
 import imageio
 
-from frontend.utils import image_normalize, download_file, check_extension
+from frontend.utils import image_normalize, download_file, check_extension, unflat_dict
+from frontend.tasks import collection_upload
 
 from django.views import View
 from django.http import HttpResponse, JsonResponse
@@ -163,16 +164,26 @@ class CollectionUpload(View):
         return {"status": "ok", "data": {"entries": entries}}
 
     def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({"status": "error", "error":{"type": "not_authenticated"}})
+
         try:
             if request.method != "POST":
                 return JsonResponse({"status": "error"})
 
             collection_id = uuid.uuid4().hex
+            visibility = 'user'
 
             output_dir = os.path.join(settings.UPLOAD_ROOT, collection_id[0:2], collection_id[2:4])
 
-            print(collection_id, flush=True)
-            print(request.FILES, flush=True)
+            # check post data
+            collection_name = request.POST.get("name")
+            if collection_name is None:
+                return JsonResponse({"status": "error", "error": {"type": "collection_name_not_defined"}})
+            if len(collection_name) < 5:
+                return JsonResponse({"status": "error", "error": {"type": "collection_name_to_short"}})
+            if len(collection_name) > 25:
+                return JsonResponse({"status": "error", "error": {"type": "collection_name_to_long"}})
 
             meta_parse_result = None
 
@@ -223,6 +234,10 @@ class CollectionUpload(View):
                 )
                 if image_parse_result["status"] != "ok":
                     return JsonResponse(image_parse_result)
+
+            entries = list(map(unflat_dict, image_parse_result["data"]["entries"]))
+
+            task = collection_upload.apply_async(({"collection_name": collection_name, "collection_id": collection_id, "visibility":visibility, "user_id": request.user.id, "entries": entries, "image_path":str(image_result["path"])},))
 
             return JsonResponse({"status": "error"})
 
