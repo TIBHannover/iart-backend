@@ -24,10 +24,28 @@ class Search(View):
 
         if request.get("settings"):
             if request["settings"].get("layout") == "umap":
+                grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
                 if request["settings"].get("grid", False):
-                    grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_SCIPY
-                else:
-                    grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                    option = grpc_request.mapping_options.add()
+                    option.key = "grid_method"
+                    option.string_val = "scipy"
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+
+                "scipy"
+                "rasterfairy"
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
+
+            if request["settings"].get("layout") == "kmeans":
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_KMEANS
+
+                option = grpc_request.mapping_options.add()
+                option.key = "k"
+                option.int_val = 10
+
+                "scipy"
+                "rasterfairy"
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
 
             if request["settings"].get("weights"):
                 weights = request["settings"]["weights"]
@@ -166,6 +184,8 @@ class Search(View):
                 entry["classifier"] = classifier_from_proto(e.classifier)
                 entry["feature"] = feature_from_proto(e.feature)
                 entry["coordinates"] = list(e.coordinates)
+                entry["distance"] = e.distance
+                entry["cluster"] = e.cluster
 
                 entry["path"] = media_url_to_preview(e.id)
                 entries.append(entry)
