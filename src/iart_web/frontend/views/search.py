@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-from frontend.utils import media_url_to_preview
+from frontend.utils import media_url_to_preview, media_url_to_image
 
 from django.views import View
 from django.http import HttpResponse, JsonResponse
@@ -188,7 +188,8 @@ class Search(View):
                 entry["distance"] = e.distance
                 entry["cluster"] = e.cluster
 
-                entry["path"] = media_url_to_preview(e.id)
+                entry["preview"] = media_url_to_preview(e.id)
+                entry["path"] = media_url_to_image(e.id)
                 entries.append(entry)
 
             aggregations = []
