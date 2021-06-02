@@ -35,11 +35,12 @@ class Search(View):
                 "rasterfairy"
                 # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
 
-            if request["settings"].get("layout") == "kmeans":
+                # TODO only for testing
+                # if request["settings"].get("layout") == "kmeans":
                 # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
-                grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_KMEANS
+                grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_KMEANS
 
-                option = grpc_request.mapping_options.add()
+                option = grpc_request.clustering_options.add()
                 option.key = "k"
                 option.int_val = 10
 
