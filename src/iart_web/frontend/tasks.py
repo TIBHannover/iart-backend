@@ -14,25 +14,26 @@ from frontend.utils import TarArchive, ZipArchive, check_extension
 
 if settings.INDEXER_PATH is not None:
     sys.path.append(settings.INDEXER_PATH)
-    print('##################################################')
-    print('##################################################')
-    print('##################################################')
+    print("##################################################")
+    print("##################################################")
+    print("##################################################")
     print(sys.path)
 
 import grpc
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
 from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_from_proto, suggestions_from_proto
 
+
 @shared_task(bind=True)
 def collection_upload(self, args):
-    print('########################')
+    print("########################")
     print(args)
-    user_id = args.get('user_id')
-    collection_name = args.get('collection_name')
-    collection_id = args.get('collection_id')
-    image_path = args.get('image_path')
-    visibility = args.get('visibility')
-    entries = args.get('entries')
+    user_id = args.get("user_id")
+    collection_name = args.get("collection_name")
+    collection_id = args.get("collection_id")
+    image_path = args.get("image_path")
+    visibility = args.get("visibility")
+    entries = args.get("entries")
 
     # Creating database entry first
 
@@ -42,9 +43,11 @@ def collection_upload(self, args):
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
-        return {"status": "error", "error":{"type":"unknown_user"}}  
+        return {"status": "error", "error": {"type": "unknown_user"}}
 
-    collection = Collection.objects.create(name=collection_name, hash_id=collection_id, user=user, progress=0.0, status="U", visibility=visibility)
+    collection = Collection.objects.create(
+        name=collection_name, hash_id=collection_id, user=user, progress=0.0, status="U", visibility=visibility
+    )
     collection.save()
 
     # start indexing
@@ -66,7 +69,6 @@ def collection_upload(self, args):
     def entry_generator(entries, archive, collection_id, collection_name, visibility):
 
         for entry in entries:
-
 
             request = indexer_pb2.IndexingRequest()
             request_image = request.image
@@ -118,36 +120,38 @@ def collection_upload(self, args):
                             origin_field.float_val = v
                         if isinstance(v, str):
                             origin_field.string_val = v
-            
+
             collection = request_image.collection
             collection.id = collection_id
             collection.name = collection_name
-            collection.is_public = (visibility =="V")
+            collection.is_public = visibility == "V"
             # print(request_image)
-            request_image.encoded = archive.read(entry['path'])
+            request_image.encoded = archive.read(entry["path"])
             yield request
         # request_image.path = image.encode()
-    if check_extension(image_path,['.zip']):
+
+    if check_extension(image_path, [".zip"]):
         archive = ZipArchive(image_path)
 
-    if check_extension(image_path,['.tar', '.tar.gz', '.tar.bz2', '.tar.xz']): 
+    if check_extension(image_path, [".tar", ".tar.gz", ".tar.bz2", ".tar.xz"]):
         archive = TarArchive(image_path)
-    
+
     # gen_iter = entry_generator(entries)
     with archive as ar:
         gen_iter = entry_generator(entries, ar, collection_id, collection_name, visibility)
         # print(next(gen_iter))
         count = 0
         for i, entry in enumerate(stub.indexing(gen_iter)):
-            count +=1
-        
+            count += 1
+            collection.progress = len(entries)
+
     # count = 0
 
-    # 
+    #
     # try_count = 1
     # while try_count > 0:
     #     try:
-            
+
     #         # print('#####')
     #         # for x in gen_iter:
     #         #     print(x.image.id)
