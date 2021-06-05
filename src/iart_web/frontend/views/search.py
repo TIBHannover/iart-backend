@@ -6,10 +6,10 @@ from frontend.utils import media_url_to_preview, media_url_to_image
 
 from django.views import View
 from django.http import HttpResponse, JsonResponse
-from django.conf import settings
+from django.conf import settings as DjangoSettings
 
-if settings.INDEXER_PATH is not None:
-    sys.path.append(settings.INDEXER_PATH)
+if DjangoSettings.INDEXER_PATH is not None:
+    sys.path.append(DjangoSettings.INDEXER_PATH)
     print(sys.path)
 
 import grpc
@@ -21,35 +21,40 @@ class Search(View):
     def parse_search_request(self, request):
         grpc_request = indexer_pb2.SearchRequest()
         weights = {"clip_embedding_feature": 1}
+        cluster = {"type": "kmeans", "n": 1}
 
         if request.get("settings"):
-            if request["settings"].get("layout") == "umap":
+            settings = request["settings"]
+            if settings.get("layout") == "umap":
                 grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
-                if request["settings"].get("grid", False):
+                if settings.get("grid", False):
                     option = grpc_request.mapping_options.add()
                     option.key = "grid_method"
                     option.string_val = "scipy"
-                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                else:
+                    option = grpc_request.mapping_options.add()
+                    option.key = "grid_method"
+                    option.string_val = ""
 
-                "scipy"
-                "rasterfairy"
-                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
+            if settings.get("cluster"):
+                if settings["cluster"].get("type"):
+                    cluster["type"] = settings["cluster"]["type"]
 
-                # TODO only for testing
-                # if request["settings"].get("layout") == "kmeans":
-                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                if settings["cluster"].get("n"):
+                    cluster["n"] = settings["cluster"]["n"]
+
+            if settings.get("weights"):
+                weights = settings["weights"]
+
+        if cluster.get("n", 1) > 1:
+            if cluster.get("type") == "agglomerative":
+                grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_AGGLOMERATIVE
+            else:
                 grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_KMEANS
 
-                option = grpc_request.clustering_options.add()
-                option.key = "k"
-                option.int_val = 10
-
-                "scipy"
-                "rasterfairy"
-                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
-
-            if request["settings"].get("weights"):
-                weights = request["settings"]["weights"]
+            option = grpc_request.clustering_options.add()
+            option.key = "k"
+            option.int_val = cluster["n"]
 
         if request.get("filters"):
             for k, v in request["filters"].items():
@@ -107,7 +112,7 @@ class Search(View):
 
                     # check if image exists in upload folder
                     image_id = q["value"]
-                    image_path = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg")
+                    image_path = os.path.join(DjangoSettings.UPLOAD_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg")
                     if os.path.exists(image_path):
                         with open(image_path, "rb") as f:
                             term.feature.image.encoded = f.read()
@@ -145,8 +150,8 @@ class Search(View):
 
         grpc_request = self.parse_search_request(query)
 
-        host = settings.GRPC_HOST  # "localhost"
-        port = settings.GRPC_PORT  # 50051
+        host = DjangoSettings.GRPC_HOST  # "localhost"
+        port = DjangoSettings.GRPC_PORT  # 50051
         channel = grpc.insecure_channel(
             "{}:{}".format(host, port),
             options=[
@@ -161,8 +166,8 @@ class Search(View):
 
     def rpc_check_load(self, job_id):
 
-        host = settings.GRPC_HOST  # "localhost"
-        port = settings.GRPC_PORT  # 50051
+        host = DjangoSettings.GRPC_HOST  # "localhost"
+        port = DjangoSettings.GRPC_PORT  # 50051
         channel = grpc.insecure_channel(
             "{}:{}".format(host, port),
             options=[
