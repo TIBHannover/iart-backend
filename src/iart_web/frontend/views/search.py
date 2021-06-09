@@ -20,21 +20,27 @@ from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_f
 class Search(View):
     def parse_search_request(self, request):
         grpc_request = indexer_pb2.SearchRequest()
+
         weights = {"clip_embedding_feature": 1}
         cluster = {"type": "kmeans", "n": 1}
 
         if request.get("settings"):
             settings = request["settings"]
-            if settings.get("layout") == "umap":
-                grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
-                if settings.get("grid", False):
-                    option = grpc_request.mapping_options.add()
-                    option.key = "grid_method"
-                    option.string_val = "scipy"
-                else:
-                    option = grpc_request.mapping_options.add()
-                    option.key = "grid_method"
-                    option.string_val = ""
+
+            if settings.get("layout"):
+                layout = settings["layout"]
+
+                if layout.get("viewType") == "umap":
+                    grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+
+                    if layout.get("viewGrid", False):
+                        option = grpc_request.mapping_options.add()
+                        option.key = "grid_method"
+                        option.string_val = "scipy"
+                    else:
+                        option = grpc_request.mapping_options.add()
+                        option.key = "grid_method"
+                        option.string_val = ""
 
             if settings.get("cluster"):
                 if settings["cluster"].get("type"):
