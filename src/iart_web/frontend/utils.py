@@ -23,6 +23,29 @@ def image_normalize(image):
     return image
 
 
+def image_resize(image, max_dim=None, min_dim=None, size=None):
+    if max_dim is not None:
+        shape = np.asarray(image.shape[:2], dtype=np.float32)
+
+        long_dim = max(shape)
+        scale = min(1, max_dim / long_dim)
+        new_shape = np.asarray(shape * scale, dtype=np.int32)
+
+    elif min_dim is not None:
+        shape = np.asarray(image.shape[:2], dtype=np.float32)
+
+        short_dim = min(shape)
+        scale = min(1, min_dim / short_dim)
+        new_shape = np.asarray(shape * scale, dtype=np.int32)
+    elif size is not None:
+        new_shape = size
+    else:
+        return image
+    img = PIL.Image.fromarray(image)
+    img = img.resize(size=new_shape[::-1])
+    return np.array(img)
+
+
 def media_url_to_image(id):
     # todo
     return "http://localhost:8000" + settings.MEDIA_URL + id[0:2] + "/" + id[2:4] + "/" + id + ".jpg"
@@ -84,6 +107,7 @@ def download_file(file, output_dir, output_name=None, max_size=None, extensions=
 
     return {"status": "ok", "path": Path(output_path)}
 
+
 def unflat_dict(data_dict, parse_json=False):
     result_map = {}
     if parse_json:
@@ -128,6 +152,7 @@ def flat_dict(data_dict, parse_json=False):
 import tarfile
 import zipfile
 
+
 class Archive:
     def __init__(self):
         pass
@@ -139,15 +164,16 @@ class Archive:
     def __exit__(self):
         pass
 
+
 class TarArchive(Archive):
     def __init__(self, path):
         self.path = path
         self.f = None
 
     def __enter__(self):
-        self.f = tarfile.open(self.path, mode='r')
+        self.f = tarfile.open(self.path, mode="r")
         return self
-    
+
     def members(self):
         if self.f is None:
             return []
@@ -158,13 +184,13 @@ class TarArchive(Archive):
     def read(self, name):
         if self.f is None:
             return None
-        
+
         try:
             return self.f.extractfile(name).read()
         except KeyError:
             return None
 
-    def __exit__(self ,type, value, traceback):
+    def __exit__(self, type, value, traceback):
         self.f.close()
         self.f = None
 
@@ -175,7 +201,7 @@ class ZipArchive(Archive):
         self.f = None
 
     def __enter__(self):
-        self.f = zipfile.ZipFile(self.path, 'r')
+        self.f = zipfile.ZipFile(self.path, "r")
         return self
 
     def members(self):
@@ -184,17 +210,16 @@ class ZipArchive(Archive):
         else:
             for name in self.f.namelist():
                 yield name
-    
 
     def read(self, name):
         if self.f is None:
             return None
-        
+
         try:
             return self.f.open(name).read()
         except KeyError:
             return None
-    
-    def __exit__(self ,type, value, traceback):
+
+    def __exit__(self, type, value, traceback):
         self.f.close()
         self.f = None

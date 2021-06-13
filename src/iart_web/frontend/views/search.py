@@ -1,8 +1,9 @@
 import os
 import sys
 import json
+from frontend.models import Collection
 
-from frontend.utils import media_url_to_preview
+from frontend.utils import media_url_to_preview, media_url_to_image
 
 from django.views import View
 from django.http import HttpResponse, JsonResponse
@@ -18,13 +19,42 @@ from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_f
 
 
 class Search(View):
-    def parse_search_request(self, request):
+    def parse_search_request(self, request, collections=None):
         grpc_request = indexer_pb2.SearchRequest()
+
+        # TODO add options to the frontend
+        if collections is not None:
+            grpc_request.collections.extend(collections)
+
+        grpc_request.include_default_collection = True
+
         weights = {"clip_embedding_feature": 1}
 
         if request.get("settings"):
             if request["settings"].get("layout") == "umap":
-                grpc_request.mapping = "umap"
+                grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                if request["settings"].get("grid", False):
+                    option = grpc_request.mapping_options.add()
+                    option.key = "grid_method"
+                    option.string_val = "scipy"
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+
+                "scipy"
+                "rasterfairy"
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
+
+                # TODO only for testing
+                # if request["settings"].get("layout") == "kmeans":
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
+                grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_KMEANS
+
+                option = grpc_request.clustering_options.add()
+                option.key = "k"
+                option.int_val = 10
+
+                "scipy"
+                "rasterfairy"
+                # grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP_GRID_RASTERFAIRY
 
             if request["settings"].get("weights"):
                 weights = request["settings"]["weights"]
@@ -71,25 +101,9 @@ class Search(View):
                     term = grpc_request.terms.add()
                     term.image_text.query = q["value"]
 
-                    plugins_defined = False
-                    if q.get("weights"):
-                        for k, v in q["weights"].items():
-                            plugins_defined = True
-                            plugins = term.image_text.plugins.add()
-                            plugins.name = k.lower()
-                            plugins.weight = v
-                    else:
-                        for k, v in weights.items():
-                            plugins_defined = True
-                            plugins = term.image_text.plugins.add()
-                            plugins.name = k.lower()
-                            plugins.weight = v
-
-                    # Fallback if weights are defined but no plugins
-                    if not plugins_defined:
-                        plugins = term.image_text.plugins.add()
-                        plugins.name = "clip_embedding_feature"
-                        plugins.weight = 1.0
+                    plugins = term.image_text.plugins.add()
+                    plugins.name = "clip_embedding_feature"
+                    plugins.weight = 1.0
 
                     if q.get("positive", True):
                         term.image_text.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
@@ -135,9 +149,9 @@ class Search(View):
 
         return grpc_request
 
-    def rpc_load(self, query):
+    def rpc_load(self, query, collections=None):
 
-        grpc_request = self.parse_search_request(query)
+        grpc_request = self.parse_search_request(query, collections=collections)
 
         host = settings.GRPC_HOST  # "localhost"
         port = settings.GRPC_PORT  # 50051
@@ -153,7 +167,7 @@ class Search(View):
 
         return {"status": "ok", "job_id": response.id, "state": "pending"}
 
-    def rpc_check_load(self, job_id):
+    def rpc_check_load(self, job_id, collections=None):
 
         host = settings.GRPC_HOST  # "localhost"
         port = settings.GRPC_PORT  # 50051
@@ -179,8 +193,11 @@ class Search(View):
                 entry["classifier"] = classifier_from_proto(e.classifier)
                 entry["feature"] = feature_from_proto(e.feature)
                 entry["coordinates"] = list(e.coordinates)
+                entry["distance"] = e.distance
+                entry["cluster"] = e.cluster
 
-                entry["path"] = media_url_to_preview(e.id)
+                entry["preview"] = media_url_to_preview(e.id)
+                entry["path"] = media_url_to_image(e.id)
                 entries.append(entry)
 
             aggregations = []
@@ -202,6 +219,10 @@ class Search(View):
         return {"status": "error", "state": "done"}
 
     def post(self, request):
+
+        if request.user.is_authenticated:
+            collections = Collection.objects.filter(user=request.user)
+            collections = [c.hash_id for c in collections]
         try:
             body = request.body.decode("utf-8")
         except (UnicodeDecodeError, AttributeError):
@@ -219,9 +240,10 @@ class Search(View):
 
         # Check for existing search job
         if "job_id" in data["params"]:
-            response = self.rpc_check_load(data["params"]["job_id"])
+            response = self.rpc_check_load(data["params"]["job_id"], collections=collections)
             return JsonResponse(response)
         # Should a new search request
-        response = self.rpc_load(data["params"])
+
+        response = self.rpc_load(data["params"], collections=collections)
 
         return JsonResponse(response)

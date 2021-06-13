@@ -3,10 +3,11 @@ import sys
 import logging
 import uuid
 
+import imageio
 
 from celery import shared_task
 from django.contrib.auth.models import User
-from frontend.models import Collection
+from frontend.models import Collection, Image
 
 from django.conf import settings
 
@@ -14,14 +15,10 @@ from frontend.utils import TarArchive, ZipArchive, check_extension
 
 if settings.INDEXER_PATH is not None:
     sys.path.append(settings.INDEXER_PATH)
-    print("##################################################")
-    print("##################################################")
-    print("##################################################")
-    print(sys.path)
 
 import grpc
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
-from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_from_proto, suggestions_from_proto
+from iart_indexer.utils import image_resize
 
 
 @shared_task(bind=True)
@@ -66,14 +63,14 @@ def collection_upload(self, args):
 
     stub = indexer_pb2_grpc.IndexerStub(channel)
 
-    def entry_generator(entries, archive, collection_id, collection_name, visibility):
+    def entry_generator(entries, collection_id, collection_name, visibility):
 
         for entry in entries:
 
             request = indexer_pb2.IndexingRequest()
             request_image = request.image
 
-            request_image.id = uuid.uuid4().hex
+            request_image.id = entry["id"]
 
             for k, v in entry["meta"].items():
 
@@ -126,7 +123,7 @@ def collection_upload(self, args):
             collection.name = collection_name
             collection.is_public = visibility == "V"
             # print(request_image)
-            request_image.encoded = archive.read(entry["path"])
+            request_image.encoded = open(entry["path"], "rb").read()
             yield request
         # request_image.path = image.encode()
 
@@ -137,38 +134,46 @@ def collection_upload(self, args):
         archive = TarArchive(image_path)
 
     # gen_iter = entry_generator(entries)
+    new_entries = []
     with archive as ar:
-        gen_iter = entry_generator(entries, ar, collection_id, collection_name, visibility)
-        # print(next(gen_iter))
-        count = 0
-        for i, entry in enumerate(stub.indexing(gen_iter)):
-            count += 1
-            collection.progress = len(entries)
+        for entry in entries:
+            # try:
+            image = imageio.imread(archive.read(entry["path"]))
+            hash_value = uuid.uuid4().hex
+            image_output_file = None
+            for res in settings.IMAGE_RESOLUTIONS:
+                min_size = res.get("min_size", 200)
+                suffix = res.get("suffix", "")
+                new_image = image_resize(image, min_dim=min_size)
 
-    # count = 0
+                image_output_dir = os.path.join(settings.UPLOAD_ROOT, hash_value[0:2], hash_value[2:4])
+                os.makedirs(image_output_dir, exist_ok=True)
+                image_output_file = os.path.join(image_output_dir, f"{hash_value}{suffix}.jpg")
+                logging.info(image_output_file)
+                imageio.imwrite(image_output_file, new_image)
+            if image_output_file is not None:
+                new_entries.append({**entry, "id": hash_value, "path": image_output_file})
+                # create database entry
+                image_db = Image.objects.create(collection=collection, owner=user, hash_id=hash_value)
+                image_db.save()
+            # except:
+            #     logging.warning('no image')
+    if len(new_entries) == 0:
+        collection.status = "E"
+        collection.save()
+        return {"status": "error"}
 
-    #
-    # try_count = 1
-    # while try_count > 0:
-    #     try:
+    gen_iter = entry_generator(new_entries, collection_id, collection_name, visibility)
+    # print(next(gen_iter))
+    count = 0
+    for i, entry in enumerate(stub.indexing(gen_iter)):
+        count += 1
+        collection.progress = count / len(entries)
+        collection.save()
 
-    #         # print('#####')
-    #         # for x in gen_iter:
-    #         #     print(x.image.id)
-    #         #     blacklist.add(x.image.id)
-    #         #     raise
-    #         for i, entry in enumerate(stub.indexing(gen_iter)):
-    #             # for i, entry in enumerate(entry_generator(entries)):
-    #             blacklist.add(entry.id)
-    #             count += 1
-    #             if count % 1000 == 0:
-    #                 speed = count / (time.time() - time_start)
-    #                 logging.info(f"Client: Indexing {count}/{len(entries)} speed:{speed}")
-    #         try_count = 0
-    #     except KeyboardInterrupt:
-    #         raise
-    #     except Exception as e:
-    #         logging.error(e)
-    #         try_count -= 1
-
+    if len(entries) == count:
+        return {"status": "okay"}
+    else:
+        collection.status = "E"
+        collection.save()
     return {"status": "error"}
