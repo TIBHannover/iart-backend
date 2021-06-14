@@ -172,6 +172,8 @@ def collection_upload(self, args):
         collection.save()
 
     if len(entries) == count:
+        collection.status = "R"
+        collection.save()
         return {"status": "okay"}
     else:
         collection.status = "E"

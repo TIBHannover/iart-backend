@@ -25,6 +25,9 @@ from frontend.tasks import collection_upload
 from django.views import View
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
+from django.db.models import Count
+
+from frontend.models import Collection, Image
 
 
 class CollectionUpload(View):
@@ -165,14 +168,14 @@ class CollectionUpload(View):
 
     def post(self, request):
         if not request.user.is_authenticated:
-            return JsonResponse({"status": "error", "error":{"type": "not_authenticated"}})
+            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
 
         try:
             if request.method != "POST":
                 return JsonResponse({"status": "error"})
 
             collection_id = uuid.uuid4().hex
-            visibility = 'user'
+            visibility = "user"
 
             output_dir = os.path.join(settings.UPLOAD_ROOT, collection_id[0:2], collection_id[2:4])
 
@@ -237,9 +240,59 @@ class CollectionUpload(View):
 
             entries = list(map(unflat_dict, image_parse_result["data"]["entries"]))
 
-            task = collection_upload.apply_async(({"collection_name": collection_name, "collection_id": collection_id, "visibility":visibility, "user_id": request.user.id, "entries": entries, "image_path":str(image_result["path"])},))
+            task = collection_upload.apply_async(
+                (
+                    {
+                        "collection_name": collection_name,
+                        "collection_id": collection_id,
+                        "visibility": visibility,
+                        "user_id": request.user.id,
+                        "entries": entries,
+                        "image_path": str(image_result["path"]),
+                    },
+                )
+            )
 
+            return JsonResponse({"status": "ok"})
+
+        except Exception as e:
+            logging.error(traceback.format_exc())
             return JsonResponse({"status": "error"})
+
+
+class CollectionList(View):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+
+        try:
+            collections = []
+            for collection in Collection.objects.filter(user=request.user).annotate(count=Count("image")):
+                collections.append(
+                    {
+                        "id": collection.hash_id,
+                        "name": collection.name,
+                        "status": collection.status,
+                        "progress": collection.progress,
+                        "date": collection.date,
+                        "count": collection.count,
+                    }
+                )
+            return JsonResponse({"status": "ok", "collections": collections})
+        except Exception as e:
+            logging.error(traceback.format_exc())
+            return JsonResponse({"status": "error"})
+
+
+class CollectionDelete(View):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+
+        try:
+            collections = []
+            for collection in Collection.object.query():
+                pass
 
         except Exception as e:
             logging.error(traceback.format_exc())
