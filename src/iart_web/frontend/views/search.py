@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+from frontend.models import Collection
 
 from frontend.utils import media_url_to_preview, media_url_to_image
 
@@ -18,8 +19,14 @@ from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_f
 
 
 class Search(View):
-    def parse_search_request(self, request):
+    def parse_search_request(self, request, collections=None):
         grpc_request = indexer_pb2.SearchRequest()
+
+        # TODO add options to the frontend
+        if collections is not None:
+            grpc_request.collections.extend(collections)
+
+        grpc_request.include_default_collection = True
 
         weights = {"clip_embedding_feature": 1}
         cluster = {"type": "kmeans", "n": 1}
@@ -118,7 +125,9 @@ class Search(View):
 
                     # check if image exists in upload folder
                     image_id = q["value"]
-                    image_path = os.path.join(DjangoSettings.UPLOAD_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg")
+                    image_path = os.path.join(
+                        DjangoSettings.UPLOAD_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg"
+                    )
                     if os.path.exists(image_path):
                         with open(image_path, "rb") as f:
                             term.feature.image.encoded = f.read()
@@ -152,9 +161,9 @@ class Search(View):
 
         return grpc_request
 
-    def rpc_load(self, query):
+    def rpc_load(self, query, collections=None):
 
-        grpc_request = self.parse_search_request(query)
+        grpc_request = self.parse_search_request(query, collections=collections)
 
         host = DjangoSettings.GRPC_HOST  # "localhost"
         port = DjangoSettings.GRPC_PORT  # 50051
@@ -170,7 +179,7 @@ class Search(View):
 
         return {"status": "ok", "job_id": response.id, "state": "pending"}
 
-    def rpc_check_load(self, job_id):
+    def rpc_check_load(self, job_id, collections=None):
 
         host = DjangoSettings.GRPC_HOST  # "localhost"
         port = DjangoSettings.GRPC_PORT  # 50051
@@ -222,6 +231,10 @@ class Search(View):
         return {"status": "error", "state": "done"}
 
     def post(self, request):
+
+        if request.user.is_authenticated:
+            collections = Collection.objects.filter(user=request.user)
+            collections = [c.hash_id for c in collections]
         try:
             body = request.body.decode("utf-8")
         except (UnicodeDecodeError, AttributeError):
@@ -239,9 +252,10 @@ class Search(View):
 
         # Check for existing search job
         if "job_id" in data["params"]:
-            response = self.rpc_check_load(data["params"]["job_id"])
+            response = self.rpc_check_load(data["params"]["job_id"], collections=collections)
             return JsonResponse(response)
         # Should a new search request
-        response = self.rpc_load(data["params"])
+
+        response = self.rpc_load(data["params"], collections=collections)
 
         return JsonResponse(response)

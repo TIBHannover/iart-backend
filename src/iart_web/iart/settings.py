@@ -161,3 +161,6 @@ except:
 
 MEDIA_URL = FORCE_SCRIPT_NAME + "media/"
 UPLOAD_URL = FORCE_SCRIPT_NAME + "uploaded/"
+
+# the last resolution will use for indexing
+IMAGE_RESOLUTIONS = [{"min_dim": 200, "suffix": "_m"}, {"min_dim": 1080, "suffix": ""}]

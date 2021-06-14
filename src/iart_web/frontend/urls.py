@@ -10,6 +10,10 @@ urlpatterns = [
     path("upload", views.Upload.as_view(), name="upload"),
     path("search", views.Search.as_view(), name="search"),
     #
+    path("collection_upload", views.CollectionUpload.as_view(), name="collection_upload"),
+    path("collection_list", views.CollectionList.as_view(), name="collection_list"),
+    path("collection_delete", views.CollectionDelete.as_view(), name="collection_delete"),
+    #
     path("get_csrf_token", user.get_csrf_token, name="get_csrf_token"),
     path("login", user.login, name="login"),
     path("logout", user.logout, name="logout"),
