@@ -77,6 +77,8 @@ class Search(View):
                     term = grpc_request.terms.add()
                     term.text.field = k
                     term.text.query = t
+                    term.text.flag = indexer_pb2.NumberSearchTerm.SHOULD
+                    # term.text.flag = indexer_pb2.NumberSearchTerm.NOT
 
         if request.get("full_text"):
             for v in request["full_text"]:
@@ -231,7 +233,7 @@ class Search(View):
         return {"status": "error", "state": "done"}
 
     def post(self, request):
-
+        collections = None
         if request.user.is_authenticated:
             collections = Collection.objects.filter(user=request.user)
             collections = [c.hash_id for c in collections]
