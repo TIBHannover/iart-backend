@@ -3,7 +3,6 @@ from django.urls import path
 
 from iart_web.frontend.views import search
 from . import views
-from . import user
 
 urlpatterns = [
     # path("load", views.load, name="load"),
@@ -14,8 +13,12 @@ urlpatterns = [
     path("collection_list", views.CollectionList.as_view(), name="collection_list"),
     path("collection_delete", views.CollectionDelete.as_view(), name="collection_delete"),
     #
-    path("get_csrf_token", user.get_csrf_token, name="get_csrf_token"),
-    path("login", user.login, name="login"),
-    path("logout", user.logout, name="logout"),
-    path("register", user.register, name="register"),
+    path("get_csrf_token", views.get_csrf_token, name="get_csrf_token"),
+    path("login", views.login, name="login"),
+    path("logout", views.logout, name="logout"),
+    path("register", views.register, name="register"),
+    path("get_user", views.GetUser.as_view(), name="get_user"),
+    #
+    path("add_bookmark", views.BookmarkAdd.as_view(), name="add_bookmark"),
+    path("remove_bookmark", views.BookmarkRemove.as_view(), name="remove_bookmark"),
 ]

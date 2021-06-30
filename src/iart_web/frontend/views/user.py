@@ -1,14 +1,14 @@
-from django.shortcuts import render
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse, Http404
-from django.conf import settings
+from django.http import JsonResponse
 from django.contrib import auth
 from django.views.decorators.http import require_http_methods
 
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.middleware.csrf import get_token
 import logging
 import json
+import traceback
 
+from django.views.decorators.csrf import csrf_protect
+from django.views import View
 
 # def get_csrf_token(request):
 #     token = get_token(request)
@@ -19,6 +19,19 @@ import json
 def get_csrf_token(request):
     # token = get_token(request)
     return JsonResponse({"status": "ok"})
+
+
+class GetUser(View):
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+
+        try:
+            user = request.user
+            return JsonResponse({"status": "ok", "data": {"username": user.get_username()}})
+        except Exception as e:
+            logging.error(traceback.format_exc())
+            return JsonResponse({"status": "error"})
 
 
 @require_http_methods(["POST"])

@@ -29,7 +29,7 @@ class ImageUserRelation(models.Model):
     library = models.BooleanField(default=False)
 
     def __str__(self):
-        return "{} {}, {}".format(self.user, self.image.hash_id)
+        return f"{self.user} {self.image.hash_id} {self.library}"
 
 
 class ImageUserTag(models.Model):

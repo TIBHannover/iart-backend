@@ -17,6 +17,8 @@ import grpc
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
 from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_from_proto, suggestions_from_proto
 
+from frontend.models import Image, ImageUserRelation
+
 
 class Search(View):
     def parse_search_request(self, request, collections=None):
@@ -77,7 +79,7 @@ class Search(View):
                     term = grpc_request.terms.add()
                     term.text.field = k
                     term.text.query = t
-                    term.text.flag = indexer_pb2.NumberSearchTerm.SHOULD
+                    term.text.flag = indexer_pb2.TextSearchTerm.SHOULD
                     # term.text.flag = indexer_pb2.NumberSearchTerm.NOT
 
         if request.get("full_text"):
@@ -232,6 +234,24 @@ class Search(View):
 
         return {"status": "error", "state": "done"}
 
+    def add_user_data(self, entries, user):
+        ids = [x["id"] for x in entries["entries"]]
+        print("#############################", flush=True)
+        print(len(ids), flush=True)
+
+        images = ImageUserRelation.objects.filter(image__hash_id__in=ids, user=user)
+
+        user_lut = {x.image.hash_id: {"bookmark": x.library} for x in images}
+
+        def map_user_data(entry):
+            if entry["id"] in user_lut:
+                return {**entry, "user": user_lut[entry["id"]]}
+            return {**entry, "user": {"bookmark": False}}
+
+        entries["entries"] = list(map(map_user_data, entries["entries"]))
+
+        return entries
+
     def post(self, request):
         collections = None
         if request.user.is_authenticated:
@@ -255,6 +275,8 @@ class Search(View):
         # Check for existing search job
         if "job_id" in data["params"]:
             response = self.rpc_check_load(data["params"]["job_id"], collections=collections)
+            if "entries" in response and request.user.is_authenticated:
+                response = self.add_user_data(response, request.user)
             return JsonResponse(response)
         # Should a new search request
 
