@@ -241,17 +241,15 @@ class Search(View):
 
     def add_user_data(self, entries, user):
         ids = [x["id"] for x in entries["entries"]]
-        print("#############################", flush=True)
-        print(len(ids), flush=True)
 
         images = ImageUserRelation.objects.filter(image__hash_id__in=ids, user=user)
 
-        user_lut = {x.image.hash_id: {"bookmark": x.library} for x in images}
+        user_lut = {x.image.hash_id: {"bookmarked": x.library} for x in images}
 
         def map_user_data(entry):
             if entry["id"] in user_lut:
                 return {**entry, "user": user_lut[entry["id"]]}
-            return {**entry, "user": {"bookmark": False}}
+            return {**entry, "user": {"bookmarked": False}}
 
         entries["entries"] = list(map(map_user_data, entries["entries"]))
 

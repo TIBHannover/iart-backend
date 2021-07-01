@@ -88,7 +88,7 @@ class BookmarkRemove(View):
         if parsed_request is None:
             return JsonResponse({"status": "error"})
 
-        image_db = Image.objects.filter(hash_id=parsed_request["image_id"])
+        image_db = Image.objects.get(hash_id=parsed_request["image_id"])
 
         print(image_db, flush=True)
 
@@ -96,3 +96,17 @@ class BookmarkRemove(View):
         image_user_db.update(library=False)
 
         return JsonResponse({"status": "ok"})
+
+
+class BookmarkList(View):
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+
+        image_user_db = ImageUserRelation.objects.filter(user=request.user, library=True)
+
+        result = []
+        for x in image_user_db:
+            result.append({"id": x.image.hash_id})
+
+        return JsonResponse({"status": "ok", "data": result})
