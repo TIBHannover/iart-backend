@@ -76,11 +76,16 @@ class Search(View):
                 if not isinstance(v, (list, set)):
                     v = [v]
                 for t in v:
+                    if isinstance(t, (int, float, str)):
+                        t = {"name": t}
                     term = grpc_request.terms.add()
                     term.text.field = k
-                    term.text.query = t
-                    term.text.flag = indexer_pb2.TextSearchTerm.SHOULD
-                    # term.text.flag = indexer_pb2.NumberSearchTerm.NOT
+                    term.text.query = t["name"]
+
+                    if t.get("positive", True):
+                        term.text.flag = indexer_pb2.NumberSearchTerm.SHOULD
+                    else:
+                        term.text.flag = indexer_pb2.NumberSearchTerm.NOT
 
         if request.get("full_text"):
             for v in request["full_text"]:
