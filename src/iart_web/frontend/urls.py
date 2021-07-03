@@ -22,4 +22,6 @@ urlpatterns = [
     path("add_bookmark", views.BookmarkAdd.as_view(), name="add_bookmark"),
     path("remove_bookmark", views.BookmarkRemove.as_view(), name="remove_bookmark"),
     path("list_bookmark", views.BookmarkList.as_view(), name="list_bookmark"),
+    #
+    path("get", views.Get.as_view(), name="get"),
 ]

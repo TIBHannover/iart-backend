@@ -21,6 +21,12 @@ class Image(models.Model):
     hash_id = models.CharField(max_length=256)
 
 
+class UploadedImage(models.Model):
+    date = models.DateTimeField(auto_now_add=True)
+    name = models.CharField(max_length=256)
+    hash_id = models.CharField(max_length=256)
+
+
 class ImageUserRelation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     image = models.ForeignKey(Image, on_delete=models.CASCADE)

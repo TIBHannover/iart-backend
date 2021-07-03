@@ -21,7 +21,7 @@ from frontend.models import Image, ImageUserRelation
 
 
 class Search(View):
-    def parse_search_request(self, request, collections=None):
+    def parse_search_request(self, request, ids=None, collections=None):
         grpc_request = indexer_pb2.SearchRequest()
 
         # TODO add options to the frontend
@@ -114,6 +114,18 @@ class Search(View):
                 grpc_request.aggregate.fields.extend([field_name])
                 grpc_request.aggregate.size = 250
 
+        if request.get("ids", False):
+
+            request_ids = request["ids"]
+            if not isinstance(request_ids, (list, set)):
+                request_ids = list(request_ids)
+            if ids is not None:
+                ids = ids.extend(request_ids)
+
+        if ids is not None:
+            print(f"IDS {ids}", flush=True)
+            grpc_request.ids.extend(ids)
+
         if request.get("query"):
             for q in request["query"]:
                 if q.get("type") == "txt":
@@ -170,9 +182,9 @@ class Search(View):
 
         return grpc_request
 
-    def rpc_load(self, query, collections=None):
+    def rpc_load(self, query, ids=None, collections=None):
 
-        grpc_request = self.parse_search_request(query, collections=collections)
+        grpc_request = self.parse_search_request(query, ids=ids, collections=collections)
 
         host = DjangoSettings.GRPC_HOST  # "localhost"
         port = DjangoSettings.GRPC_PORT  # 50051
@@ -222,9 +234,7 @@ class Search(View):
                 entries.append(entry)
 
             aggregations = []
-            print("################# aggregations")
             for e in response.aggregate:
-                print(e.field_name)
                 aggr = {"field": e.field_name, "entries": []}
                 for x in e.entries:
                     aggr["entries"].append({"name": x.key, "count": x.int_val})
@@ -253,6 +263,8 @@ class Search(View):
 
         entries["entries"] = list(map(map_user_data, entries["entries"]))
 
+        print(f"Entries: {entries['entries'][:3]}")
+
         return entries
 
     def post(self, request):
@@ -260,6 +272,7 @@ class Search(View):
         if request.user.is_authenticated:
             collections = Collection.objects.filter(user=request.user)
             collections = [c.hash_id for c in collections]
+
         try:
             body = request.body.decode("utf-8")
         except (UnicodeDecodeError, AttributeError):
@@ -279,10 +292,21 @@ class Search(View):
         if "job_id" in data["params"]:
             response = self.rpc_check_load(data["params"]["job_id"], collections=collections)
             if "entries" in response and request.user.is_authenticated:
+                print("add user data")
                 response = self.add_user_data(response, request.user)
             return JsonResponse(response)
         # Should a new search request
 
-        response = self.rpc_load(data["params"], collections=collections)
+        ids = None
+        if data["params"].get("bookmarks", False):
+
+            if not request.user.is_authenticated:
+                return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+
+            image_user_db = ImageUserRelation.objects.filter(user=request.user, library=True)
+
+            ids = [x.image.hash_id for x in image_user_db]
+
+        response = self.rpc_load(data["params"], ids=ids, collections=collections)
 
         return JsonResponse(response)

@@ -15,10 +15,11 @@ from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 
 
+from frontend.models import UploadedImage
+
+
 class Upload(View):
     def post(self, request):
-        print("#####################", flush=True)
-        print(request.FILES, flush=True)
         try:
             if request.method != "POST":
                 return JsonResponse({"status": "error"})
@@ -42,6 +43,8 @@ class Upload(View):
                 output_dir = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4])
                 os.makedirs(output_dir, exist_ok=True)
                 imageio.imwrite(os.path.join(output_dir, image_id + ".jpg"), image)
+
+                image_db, created = UploadedImage.objects.get_or_create(name=title, hash_id=image_id)
 
                 return JsonResponse(
                     {
