@@ -89,14 +89,11 @@ def download_file(file, output_dir, output_name=None, max_size=None, extensions=
 
     if extensions is not None:
         if not check_extension(path, extensions):
-            return {"status": "error", "error": {"type": "wronge_file_extension"}}
+            return {"status": "error", "error": {"type": "wrong_file_extension"}}
     # TODO add parameter
     if max_size is not None:
         if file.size > max_size:
-            return {
-                "status": "error",
-                "error": {"type": "file_to_large"},
-            }
+            return {"status": "error", "error": {"type": "file_too_large"}}
 
     os.makedirs(output_dir, exist_ok=True)
 
