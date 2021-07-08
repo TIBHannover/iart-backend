@@ -28,7 +28,13 @@ class GetUser(View):
 
         try:
             user = request.user
-            return JsonResponse({"status": "ok", "data": {"username": user.get_username()}})
+            return JsonResponse({
+                "status": "ok", "data": {
+                    "username": user.get_username(),
+                    "email": user.email,
+                    "date": user.date_joined,
+                }
+            })
         except Exception as e:
             logging.error(traceback.format_exc())
             return JsonResponse({"status": "error"})
@@ -64,8 +70,13 @@ def login(request):
     user = auth.authenticate(username=username, password=password)
     if user is not None:
         auth.login(request, user)
-
-        return JsonResponse({"status": "ok", "data": {"username": user.get_username()}})
+        return JsonResponse({
+            "status": "ok", "data": {
+                "username": user.get_username(),
+                "email": user.email,
+                "date": user.date_joined,
+            }
+        })
 
     return JsonResponse({"status": "error"})
 
