@@ -4,11 +4,15 @@ import json
 import uuid
 import logging
 import traceback
+import tempfile
 
 from urllib.parse import urlparse
 import imageio
 
-from frontend.utils import image_normalize, upload_url_to_image
+import wand.image as wimage
+
+
+from frontend.utils import image_normalize, upload_url_to_image, download_url, download_file
 
 from django.views import View
 from django.http import HttpResponse, JsonResponse
@@ -16,6 +20,7 @@ from django.conf import settings
 
 
 from frontend.models import UploadedImage
+from frontend.utils import image_normalize, download_file
 
 
 class Upload(View):
@@ -28,16 +33,52 @@ class Upload(View):
             image_id = uuid.uuid4().hex
             title = ""
             if "file" in request.FILES:
-                data = request.FILES["file"].read()
-                if data is not None:
-                    image = image_normalize(imageio.imread(data))
-                    title = request.FILES["file"].name
+                tmpdir = tempfile.mkdtemp()
+
+                image_result = download_file(
+                    output_dir=tmpdir,
+                    output_name=image_id,
+                    file=request.FILES["file"],
+                    max_size=4 * 1024 * 1024,
+                    extensions=(".gif", ".jpg", ".png", ".tif", ".tiff", ".bmp"),
+                )
+                if image_result["status"] != "ok":
+                    return JsonResponse(image_result)
+                # try:
+                output_dir = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4])
+                os.makedirs(output_dir, exist_ok=True)
+                wimage.Image(filename=image_result["path"]).save(filename=os.path.join(output_dir, image_id + ".jpg"))
+                # except:
+                #     return JsonResponse({"status": "error", "error": {"type": "file_is_not_readable"}})
+
+                image = imageio.imread(image_result["path"])
+                image = image_normalize(image)
+                title = image_result["origin"]
 
             if "url" in request.POST:
-                url_parsed = urlparse(request.POST["url"])
-                if url_parsed.netloc:
-                    image = image_normalize(imageio.imread(request.POST["url"]))
-                    title = os.path.basename(url_parsed.path)
+                tmpdir = tempfile.mkdtemp()
+
+                image_result = download_url(
+                    output_dir=tmpdir,
+                    output_name=image_id,
+                    url=request.POST["url"],
+                    max_size=4 * 1024 * 1024,
+                    extensions=(".gif", ".jpg", ".png", ".tif", ".tiff", ".bmp"),
+                )
+                if image_result["status"] != "ok":
+                    return JsonResponse(image_result)
+                try:
+                    output_dir = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4])
+                    os.makedirs(output_dir, exist_ok=True)
+                    wimage.Image(filename=image_result["path"]).save(
+                        filename=os.path.join(output_dir, image_id + ".jpg")
+                    )
+                except:
+                    return JsonResponse({"status": "error", "error": {"type": "file_is_not_readable"}})
+
+                image = imageio.imread(image_result["path"])
+                image = image_normalize(image)
+                title = image_result["origin"]
 
             if image is not None:
                 output_dir = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4])
