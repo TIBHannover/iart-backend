@@ -32,6 +32,7 @@ class Search(View):
 
         weights = {"clip_embedding_feature": 1}
         cluster = {"type": "kmeans", "n": 1}
+        lang = request.get("lang", "en")
 
         if request.get("settings"):
             settings = request["settings"]
@@ -135,6 +136,7 @@ class Search(View):
                     plugins = term.image_text.plugins.add()
                     plugins.name = "clip_embedding_feature"
                     plugins.weight = 1.0
+                    # TODO: plugins.lang = lang
 
                     if q.get("positive", True):
                         term.image_text.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
