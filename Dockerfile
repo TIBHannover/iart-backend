@@ -1,9 +1,9 @@
-FROM ubuntu:20.10
+FROM ubuntu:21.04
 
 RUN DEBIAN_FRONTEND=noninteractive apt update --fix-missing -y
 RUN DEBIAN_FRONTEND=noninteractive apt upgrade -y 
 RUN DEBIAN_FRONTEND=noninteractive apt install python3-pip npm git -y
-RUN DEBIAN_FRONTEND=noninteractive apt install libmariadbclient-dev imagemagick -y
+RUN DEBIAN_FRONTEND=noninteractive apt install libmariadbclient-dev-compat imagemagick -y
 
 RUN pip install poetry
 

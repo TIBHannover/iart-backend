@@ -9,6 +9,11 @@ from django.views import View
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings as DjangoSettings
 
+from django.core.cache import cache
+
+import msgpack
+import hashlib
+
 if DjangoSettings.INDEXER_PATH is not None:
     sys.path.append(DjangoSettings.INDEXER_PATH)
     print(sys.path)
@@ -188,6 +193,13 @@ class Search(View):
 
         grpc_request = self.parse_search_request(query, ids=ids, collections=collections)
 
+        grpc_request_bin = grpc_request.SerializeToString()
+        grpc_request_hash = hashlib.sha256(grpc_request_bin).hexdigest()
+
+        response_cache = cache.get(grpc_request_hash)
+        if response_cache is not None:
+            return msgpack.unpackb(response_cache)
+
         host = DjangoSettings.GRPC_HOST  # "localhost"
         port = DjangoSettings.GRPC_PORT  # 50051
         channel = grpc.insecure_channel(
@@ -199,6 +211,8 @@ class Search(View):
         )
         stub = indexer_pb2_grpc.IndexerStub(channel)
         response = stub.search(grpc_request)
+
+        cache.set(response.id, grpc_request_hash)
 
         return {"status": "ok", "job_id": response.id, "state": "pending"}
 
@@ -242,7 +256,16 @@ class Search(View):
                     aggr["entries"].append({"name": x.key, "count": x.int_val})
 
                 aggregations.append(aggr)
-            return {"status": "ok", "entries": entries, "aggregations": aggregations, "state": "done"}
+
+            result = {"status": "ok", "entries": entries, "aggregations": aggregations, "state": "done"}
+
+            # set cache
+            request_hash = cache.get(job_id)
+
+            if request_hash is not None:
+                cache_data = msgpack.packb(result)
+                cache.set(request_hash, msgpack.packb(result))
+            return result
         except grpc.RpcError as e:
 
             # search is still running
