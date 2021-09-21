@@ -244,6 +244,7 @@ class Search(View):
                 entry["coordinates"] = list(e.coordinates)
                 entry["distance"] = e.distance
                 entry["cluster"] = e.cluster
+                entry["padded"] = e.padded
 
                 entry["preview"] = media_url_to_preview(e.id)
                 entry["path"] = media_url_to_image(e.id)
