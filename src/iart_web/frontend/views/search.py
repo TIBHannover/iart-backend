@@ -153,6 +153,17 @@ class Search(View):
 
                     # check if image exists in upload folder
                     image_id = q["value"]
+                    roi_defined = False
+                    if q.get("roi"):
+                        roi = q.get("roi")
+                        # if isinstance(roi, dict):
+                        #     if roi.get('x') > 0 and roi.get('x') <= 1
+                        term.feature.image.roi.x = roi.get("x")
+                        term.feature.image.roi.y = roi.get("y")
+                        term.feature.image.roi.width = roi.get("width")
+                        term.feature.image.roi.height = roi.get("height")
+                        roi_defined = True
+
                     image_path = os.path.join(
                         DjangoSettings.UPLOAD_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg"
                     )
@@ -160,7 +171,18 @@ class Search(View):
                         with open(image_path, "rb") as f:
                             term.feature.image.encoded = f.read()
                     else:
-                        term.feature.image.id = q["value"]
+                        # if roi is defined we have to submit the image from the index again
+                        if roi_defined:
+
+                            image_path = os.path.join(
+                                DjangoSettings.MEDIA_ROOT, image_id[0:2], image_id[2:4], f"{image_id}.jpg"
+                            )
+
+                            if os.path.exists(image_path):
+                                with open(image_path, "rb") as f:
+                                    term.feature.image.encoded = f.read()
+                        else:
+                            term.feature.image.id = q["value"]
 
                     if q.get("weights"):
                         for k, v in q["weights"].items():
