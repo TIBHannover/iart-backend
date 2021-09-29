@@ -4,6 +4,7 @@ import json
 from frontend.models import Collection
 
 from frontend.utils import media_url_to_preview, media_url_to_image
+from frontend.utils import RetryOnRpcErrorClientInterceptor, ExponentialBackoff
 
 from django.views import View
 from django.http import HttpResponse, JsonResponse
@@ -224,12 +225,23 @@ class Search(View):
 
         host = DjangoSettings.GRPC_HOST  # "localhost"
         port = DjangoSettings.GRPC_PORT  # 50051
-        channel = grpc.insecure_channel(
-            "{}:{}".format(host, port),
-            options=[
-                ("grpc.max_send_message_length", 50 * 1024 * 1024),
-                ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-            ],
+        interceptors = (
+            RetryOnRpcErrorClientInterceptor(
+                max_attempts=4,
+                sleeping_policy=ExponentialBackoff(init_backoff_ms=100, max_backoff_ms=1600, multiplier=2),
+                status_for_retry=(grpc.StatusCode.UNAVAILABLE,),
+            ),
+        )
+
+        channel = grpc.intercept_channel(
+            grpc.insecure_channel(
+                "{}:{}".format(host, port),
+                options=[
+                    ("grpc.max_send_message_length", 50 * 1024 * 1024),
+                    ("grpc.max_receive_message_length", 50 * 1024 * 1024),
+                ],
+            ),
+            *interceptors,
         )
         stub = indexer_pb2_grpc.IndexerStub(channel)
         response = stub.search(grpc_request)
@@ -242,12 +254,23 @@ class Search(View):
 
         host = DjangoSettings.GRPC_HOST  # "localhost"
         port = DjangoSettings.GRPC_PORT  # 50051
-        channel = grpc.insecure_channel(
-            "{}:{}".format(host, port),
-            options=[
-                ("grpc.max_send_message_length", 50 * 1024 * 1024),
-                ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-            ],
+        interceptors = (
+            RetryOnRpcErrorClientInterceptor(
+                max_attempts=4,
+                sleeping_policy=ExponentialBackoff(init_backoff_ms=100, max_backoff_ms=1600, multiplier=2),
+                status_for_retry=(grpc.StatusCode.UNAVAILABLE,),
+            ),
+        )
+
+        channel = grpc.intercept_channel(
+            grpc.insecure_channel(
+                "{}:{}".format(host, port),
+                options=[
+                    ("grpc.max_send_message_length", 50 * 1024 * 1024),
+                    ("grpc.max_receive_message_length", 50 * 1024 * 1024),
+                ],
+            ),
+            *interceptors,
         )
         stub = indexer_pb2_grpc.IndexerStub(channel)
 
