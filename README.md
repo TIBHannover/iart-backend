@@ -76,10 +76,3 @@ For the autocomplete to work, it must also be regenerated:
 ```sh
 sudo docker-compose exec indexer python -m iart_indexer --m client --task build_suggester
 ```
-
-### Generete webpack
-
-```sh
-sudo docker-compose exec web npm install
-sudo docker-compose exec web npx webpack
-```

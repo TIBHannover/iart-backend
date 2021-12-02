@@ -36,10 +36,8 @@ ALLOWED_HOSTS = [
     "localhost",
 ]
 
-
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
-
 
 INSTALLED_APPS = [
     "rest_framework",
@@ -132,34 +130,27 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/2.1/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
 USE_I18N = True
-
 USE_L10N = True
-
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
 
-
 STATICFILES_DIRS = []
 
 STATIC_URL = FORCE_SCRIPT_NAME + "/static/"
 
-# MEDIA_ROOT = os.path.join(os.path.dirname(__file__), "..", "media")
-
 MEDIA_ROOT = os.path.join("/data/media/")
-
 UPLOAD_ROOT = os.path.join("/data/upload/")
 
 GRPC_HOST = "localhost"
 GRPC_PORT = 50051
 
-INDEXER_PATH = "/indexer"
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+INDEXER_PATH = "/indexer"
 
 try:
     from .user_settings import *
