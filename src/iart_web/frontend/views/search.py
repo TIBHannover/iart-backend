@@ -17,6 +17,7 @@ from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_f
 
 from frontend.models import Image, ImageUserRelation, Collection
 from frontend.utils import media_url_to_preview, media_url_to_image
+from frontend.utils import upload_url_to_preview, upload_url_to_image
 from frontend.utils import RetryOnRpcErrorClientInterceptor, ExponentialBackoff
 
 logger = logging.getLogger(__name__)
@@ -309,8 +310,18 @@ class Search(View):
                 entry["cluster"] = e.cluster
                 entry["padded"] = e.padded
 
-                entry["preview"] = media_url_to_preview(e.id)
-                entry["path"] = media_url_to_image(e.id)
+                entry["collection"] = {
+                    "id": e.collection.id,
+                    "name": e.collection.name,
+                    "is_public": e.collection.is_public,
+                }
+
+                if e.collection.id in collections:
+                    entry["preview"] = upload_url_to_preview(e.id)
+                    entry["path"] = upload_url_to_image(e.id)
+                else:
+                    entry["preview"] = media_url_to_preview(e.id)
+                    entry["path"] = media_url_to_image(e.id)
 
                 entries.append(entry)
 
