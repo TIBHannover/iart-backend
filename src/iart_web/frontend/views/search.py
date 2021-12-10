@@ -9,6 +9,7 @@ import logging
 from django.views import View
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings as DjangoSettings
+from django.db.models import Count
 from django.core.cache import cache
 from django.core.exceptions import BadRequest
 
@@ -27,7 +28,7 @@ if DjangoSettings.INDEXER_PATH is not None:
 
 
 class Search(View):
-    def parse_search_request(self, request, ids=None, collections=None):
+    def parse_search_request(self, request, ids=None, collection_ids=None):
         grpc_request = indexer_pb2.SearchRequest()
 
         weights = {"clip_embedding_feature": 1}
@@ -72,7 +73,7 @@ class Search(View):
             option.key = "k"
             option.int_val = cluster["n"]
 
-        filtered_collections = set()
+        user_collection_ids = set()
 
         if request.get("filters"):
             for k, v in request["filters"].items():
@@ -84,7 +85,7 @@ class Search(View):
                         t = {"name": t}
 
                     if k == 'collection' and t.get('hash_id'):
-                        filtered_collections.add(t['hash_id'])
+                        user_collection_ids.add(t['hash_id'])
                         continue
 
                     term = grpc_request.terms.add()
@@ -98,11 +99,11 @@ class Search(View):
 
         grpc_request.include_default_collection = True
 
-        if filtered_collections:
-            grpc_request.collections.extend(list(filtered_collections))
+        if user_collection_ids:
+            grpc_request.collections.extend(list(user_collection_ids))
             grpc_request.include_default_collection = False
-        elif collections is not None:
-            grpc_request.collections.extend(collections)
+        elif collection_ids is not None:
+            grpc_request.collections.extend(collection_ids)
 
         if request.get("full_text"):
             for v in request["full_text"]:
@@ -224,9 +225,9 @@ class Search(View):
 
         return grpc_request
 
-    def rpc_load(self, query, ids=None, collections=None):
+    def rpc_load(self, query, ids=None, collection_ids=None):
         grpc_request = self.parse_search_request(
-            query, ids=ids, collections=collections
+            query, ids=ids, collection_ids=collection_ids
         )
 
         grpc_request_bin = grpc_request.SerializeToString()
@@ -296,6 +297,8 @@ class Search(View):
 
         try:
             response = stub.list_search_result(request)
+            collection_ids = [c['hash_id'] for c in collections]
+
             entries = []
 
             for e in response.entries:
@@ -314,9 +317,10 @@ class Search(View):
                     "id": e.collection.id,
                     "name": e.collection.name,
                     "is_public": e.collection.is_public,
+                    "user": e.collection.id in collection_ids,
                 }
 
-                if e.collection.id in collections:
+                if e.collection.id in collection_ids:
                     entry["preview"] = upload_url_to_preview(e.id)
                     entry["path"] = upload_url_to_image(e.id)
                 else:
@@ -334,6 +338,9 @@ class Search(View):
                     aggr["entries"].append({"name": x.key, "count": x.int_val})
 
                 aggregations.append(aggr)
+
+            if collections:
+                aggregations.append({"field": "collection", "entries": collections})
 
             result = {
                 "status": "ok", "entries": entries,
@@ -371,12 +378,6 @@ class Search(View):
         return entries
 
     def post(self, request):
-        collections = None
-
-        if request.user.is_authenticated:
-            collections = Collection.objects.filter(user=request.user)
-            collections = [c.hash_id for c in collections]
-
         try:
             body = request.body.decode("utf-8")
         except (UnicodeDecodeError, AttributeError):
@@ -390,24 +391,42 @@ class Search(View):
         if "params" not in data:
             raise BadRequest()
 
-        if "job_id" in data["params"]:
-            response = self.rpc_check_load(data["params"]["job_id"], collections=collections)
+        params = data["params"]
+        collections = None
+        
+        if request.user.is_authenticated:
+            collections = [
+                {
+                    "hash_id": collection.hash_id,
+                    "name": collection.name,
+                    "count": collection.count,
+                }
+                for collection in Collection.objects\
+                    .filter(user=request.user)\
+                    .annotate(count=Count("image"))
+            ]
+
+        if "job_id" in params:
+            response = self.rpc_check_load(params["job_id"], collections)
 
             if "entries" in response and request.user.is_authenticated:
                 response = self.add_user_data(response, request.user)
 
             return JsonResponse(response)
 
-        ids = None
+        image_ids = None
+        collection_ids = None
 
-        if data["params"].get("bookmarks", False):
+        if params.get("bookmarks", False):
             if not request.user.is_authenticated:
                 raise BadRequest("not_authenticated")
 
             image_user_db = ImageUserRelation.objects.filter(user=request.user, library=True)
+            image_ids = [x.image.hash_id for x in image_user_db]
 
-            ids = [x.image.hash_id for x in image_user_db]
-
-        response = self.rpc_load(data["params"], ids=ids, collections=collections)
+        if collections:
+            collection_ids = [c['hash_id'] for c in collections]
+            
+        response = self.rpc_load(params, image_ids, collection_ids)
 
         return JsonResponse(response)
