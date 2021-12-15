@@ -8,20 +8,28 @@ import logging
 import zipfile
 import tarfile
 import traceback
+import grpc
 import dateutil.parser
+
 
 from pathlib import Path
 from urllib.parse import urlparse
 
 from django.views import View
 from django.http import HttpResponse, JsonResponse
-from django.conf import settings
+from django.conf import settings 
 from django.db.models import Count
 from django.core.exceptions import BadRequest
 
 from frontend.tasks import collection_upload
 from frontend.models import Collection, Image
 from frontend.utils import image_normalize, download_file, check_extension, unflat_dict
+
+from frontend.utils import RetryOnRpcErrorClientInterceptor, ExponentialBackoff
+from iart_indexer import indexer_pb2, indexer_pb2_grpc
+
+if settings.INDEXER_PATH is not None:
+    sys.path.append(settings.INDEXER_PATH)
 
 logger = logging.getLogger(__name__)
 
@@ -384,7 +392,33 @@ class CollectionDelete(View):
             images.delete()
             collection.delete()
 
-            # TODO: Remove from Faiss, Elasticsearch
+            # Remove entries from elasticsearch and faiss
+            interceptors = (
+                RetryOnRpcErrorClientInterceptor(
+                    max_attempts=4,
+                    sleeping_policy=ExponentialBackoff(
+                        init_backoff_ms=100,
+                        max_backoff_ms=1600,
+                        multiplier=2,
+                    ),
+                    status_for_retry=(grpc.StatusCode.UNAVAILABLE,),
+                ),
+            )
+
+            channel = grpc.intercept_channel(
+                grpc.insecure_channel(
+                    f"{settings.GRPC_HOST}:{settings.GRPC_PORT}",
+                    options=[
+                        ("grpc.max_send_message_length", 50 * 1024 * 1024),
+                        ("grpc.max_receive_message_length", 50 * 1024 * 1024),
+                    ],
+                ),
+                *interceptors,
+            )
+
+            stub = indexer_pb2_grpc.IndexerStub(channel)
+            response = stub.collection_delete(indexer_pb2.CollectionDeleteRequest(id = params["hash_id"]))
+
 
             return JsonResponse({"status": "ok"})
         except Exception as e:
