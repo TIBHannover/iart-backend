@@ -3,100 +3,108 @@ import sys
 import json
 import uuid
 import logging
-import traceback
-import tempfile
-
-from urllib.parse import urlparse
 import imageio
+import tempfile
+import traceback
 
-import wand.image as wimage
-
-
-from frontend.utils import image_normalize, upload_url_to_image, download_url, download_file
-
-from django.views import View
-from django.http import HttpResponse, JsonResponse
+from wand.image import Image
+from urllib.parse import urlparse
 from django.conf import settings
-
-
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.exceptions import APIException
 from frontend.models import UploadedImage
-from frontend.utils import image_normalize, download_file
+from frontend.utils import (
+    image_normalize,
+    download_url,
+    download_file,
+    upload_url_to_image,
+    upload_url_to_preview,
+)
+
+logger = logging.getLogger(__name__)
 
 
-class Upload(View):
-    def post(self, request):
+class Upload(APIView):
+    def post(self, request, format=None):
+        image_id = uuid.uuid4().hex
+
+        if request.data.get('file'):
+            tmp_dir = tempfile.mkdtemp()
+
+            image_result = download_file(
+                output_dir=tmp_dir,
+                output_name=image_id,
+                file=request.data['file'],
+                max_size=5 * 1024 * 1024,
+                extensions=(
+                    '.gif', '.jpg', '.png',
+                    '.tif', '.tiff', '.bmp',
+                ),
+            )
+        elif request.data.get('url'):
+            tmp_dir = tempfile.mkdtemp()
+
+            image_result = download_url(
+                output_dir=tmp_dir,
+                output_name=image_id,
+                url=request.data['url'],
+                max_size=5 * 1024 * 1024,
+                extensions=(
+                    '.gif', '.jpg', '.png',
+                    '.tif', '.tiff', '.bmp',
+                ),
+            )
+        else:
+            image_result = {
+                'status': 'error',
+                'error': {
+                    'type': 'unknown_error',
+                },
+            }
+
+        if image_result['status'] != 'ok':
+            raise APIException(image_result['error']['type'])
+
+        output_dir = os.path.join(
+            settings.UPLOAD_ROOT,
+            image_id[0:2],
+            image_id[2:4],
+        )
+        os.makedirs(output_dir, exist_ok=True)
+
+        output_path = os.path.join(output_dir, f'{image_id}.jpg')
+
         try:
-            if request.method != "POST":
-                return JsonResponse({"status": "error"})
+            with Image(filename=image_result['path']) as img:
+                img.format = 'jpeg'
+                img.save(filename=output_path)
 
-            image = None
-            image_id = uuid.uuid4().hex
-            title = ""
-            if "file" in request.FILES:
-                tmpdir = tempfile.mkdtemp()
+            image = imageio.imread(image_result['path'])
+            image = image_normalize(image)
+        except:
+            raise APIException('file_is_not_readable')
 
-                image_result = download_file(
-                    output_dir=tmpdir,
-                    output_name=image_id,
-                    file=request.FILES["file"],
-                    max_size=4 * 1024 * 1024,
-                    extensions=(".gif", ".jpg", ".png", ".tif", ".tiff", ".bmp"),
-                )
-                if image_result["status"] != "ok":
-                    return JsonResponse(image_result)
-                # try:
-                output_dir = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4])
-                os.makedirs(output_dir, exist_ok=True)
-                wimage.Image(filename=image_result["path"]).save(filename=os.path.join(output_dir, image_id + ".jpg"))
-                # except:
-                #     return JsonResponse({"status": "error", "error": {"type": "file_is_not_readable"}})
-
-                image = imageio.imread(image_result["path"])
-                image = image_normalize(image)
-                title = image_result["origin"]
-
-            if "url" in request.POST:
-                tmpdir = tempfile.mkdtemp()
-
-                image_result = download_url(
-                    output_dir=tmpdir,
-                    output_name=image_id,
-                    url=request.POST["url"],
-                    max_size=4 * 1024 * 1024,
-                    extensions=(".gif", ".jpg", ".png", ".tif", ".tiff", ".bmp"),
-                )
-                if image_result["status"] != "ok":
-                    return JsonResponse(image_result)
-                try:
-                    output_dir = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4])
-                    os.makedirs(output_dir, exist_ok=True)
-                    wimage.Image(filename=image_result["path"]).save(
-                        filename=os.path.join(output_dir, image_id + ".jpg")
-                    )
-                except:
-                    return JsonResponse({"status": "error", "error": {"type": "file_is_not_readable"}})
-
-                image = imageio.imread(image_result["path"])
-                image = image_normalize(image)
-                title = image_result["origin"]
-
+        try:
             if image is not None:
-                output_dir = os.path.join(settings.UPLOAD_ROOT, image_id[0:2], image_id[2:4])
-                os.makedirs(output_dir, exist_ok=True)
-                imageio.imwrite(os.path.join(output_dir, image_id + ".jpg"), image)
+                imageio.imwrite(output_path, image)
 
-                image_db, created = UploadedImage.objects.get_or_create(name=title, hash_id=image_id)
-
-                return JsonResponse(
-                    {
-                        "status": "ok",
-                        "entries": [{"id": image_id, "meta": {"title": title}, "path": upload_url_to_image(image_id)}],
-                    }
+                image_db, created = UploadedImage.objects.get_or_create(
+                    name=image_result['origin'],
+                    hash_id=image_id,
                 )
 
-            return JsonResponse({"status": "error"})
+                return Response({
+                    'entries': [{
+                        'id': image_id,
+                        'meta': {
+                            'title': image_result['origin'],
+                        },
+                        'path': upload_url_to_image(image_id),
+                        'preview': upload_url_to_image(image_id),
+                    }],
+                })
+        except Exception as error:
+            logger.error(traceback.format_exc())
 
-        except Exception as e:
-            print(e)
-            logging.error(traceback.format_exc())
-            return JsonResponse({"status": "error"})
+        raise APIException('unknown_error')

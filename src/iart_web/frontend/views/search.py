@@ -1,25 +1,31 @@
 import os
 import sys
-import json
 import grpc
 import msgpack
 import hashlib
 import logging
 
-from django.views import View
-from django.http import HttpResponse, JsonResponse
+from .utils import RPCView
 from django.conf import settings as DjangoSettings
 from django.db.models import Count
 from django.core.cache import cache
-from django.core.exceptions import BadRequest
+from rest_framework.response import Response
+from rest_framework.exceptions import APIException
+from frontend.models import Image, ImageUserRelation, Collection
+from frontend.utils import (
+    media_url_to_preview,
+    media_url_to_image,
+    upload_url_to_preview,
+    upload_url_to_image,
+)
 
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
-from iart_indexer.utils import meta_from_proto, classifier_from_proto, feature_from_proto, suggestions_from_proto
-
-from frontend.models import Image, ImageUserRelation, Collection
-from frontend.utils import media_url_to_preview, media_url_to_image
-from frontend.utils import upload_url_to_preview, upload_url_to_image
-from frontend.utils import RetryOnRpcErrorClientInterceptor, ExponentialBackoff
+from iart_indexer.utils import (
+    meta_from_proto,
+    classifier_from_proto,
+    feature_from_proto,
+    suggestions_from_proto,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,75 +33,74 @@ if DjangoSettings.INDEXER_PATH is not None:
     sys.path.append(DjangoSettings.INDEXER_PATH)
 
 
-class Search(View):
-    def parse_search_request(self, request, ids=None, collection_ids=None):
+class Search(RPCView):
+    def parse_search_request(self, params, ids=None, collection_ids=None):
         grpc_request = indexer_pb2.SearchRequest()
 
-        weights = {"clip_embedding_feature": 1}
-        cluster = {"type": "kmeans", "n": 1}
-        lang = request.get("lang", "en")
+        weights = {'clip_embedding_feature': 1}
+        cluster = {'type': 'kmeans', 'n': 1}
+        lang = params.get('lang', 'en')
 
-        if request.get("settings"):
-            settings = request["settings"]
+        if params.get('settings'):
+            settings = params['settings']
 
-            if settings.get("layout"):
-                layout = settings["layout"]
+            if settings.get('layout'):
+                layout = settings['layout']
 
-                if layout.get("viewType") == "umap":
+                if layout.get('viewType') == 'umap':
                     grpc_request.mapping = indexer_pb2.SearchRequest.MAPPING_UMAP
 
-                    if layout.get("viewGrid", False):
+                    if layout.get('viewGrid', False):
                         option = grpc_request.mapping_options.add()
-                        option.key = "grid_method"
-                        option.string_val = "scipy"
+                        option.key = 'grid_method'
+                        option.string_val = 'scipy'
                     else:
                         option = grpc_request.mapping_options.add()
-                        option.key = "grid_method"
-                        option.string_val = ""
+                        option.key = 'grid_method'
+                        option.string_val = ''
 
-            if settings.get("cluster"):
-                if settings["cluster"].get("type"):
-                    cluster["type"] = settings["cluster"]["type"]
+            if settings.get('cluster'):
+                if settings['cluster'].get('type'):
+                    cluster['type'] = settings['cluster']['type']
 
-                if settings["cluster"].get("n"):
-                    cluster["n"] = settings["cluster"]["n"]
+                if settings['cluster'].get('n'):
+                    cluster['n'] = settings['cluster']['n']
 
-            if settings.get("weights"):
-                weights = settings["weights"]
+            if settings.get('weights'):
+                weights = settings['weights']
 
-        if cluster.get("n", 1) > 1:
-            if cluster.get("type") == "agglomerative":
+        if cluster.get('n', 1) > 1:
+            if cluster.get('type') == 'agglomerative':
                 grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_AGGLOMERATIVE
             else:
                 grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_KMEANS
 
             option = grpc_request.clustering_options.add()
-            option.key = "k"
-            option.int_val = cluster["n"]
+            option.key = 'k'
+            option.int_val = cluster['n']
 
         user_collection_ids = set()
 
-        if request.get("filters"):
-            for k, v in request["filters"].items():
-                if not isinstance(v, (list, set)):
-                    v = [v]
+        for k, v in params.get('filters', {}).items():
+            if not isinstance(v, (list, set)):
+                v = [v]
 
-                for t in v:
-                    if isinstance(t, (int, float, str)):
-                        t = {"name": t}
+            for t in v:
+                if isinstance(t, (int, float, str)):
+                    t = {'name': t}
 
-                    if k == 'collection' and t.get('hash_id'):
-                        user_collection_ids.add(t['hash_id'])
-                        continue
+                if k == 'collection' and t.get('hash_id'):
+                    user_collection_ids.add(t['hash_id'])
+                    continue
 
-                    term = grpc_request.terms.add()
-                    term.text.field = k
-                    term.text.query = t["name"]
+                term = grpc_request.terms.add()
+                term.text.field = k
+                term.text.query = t['name']
 
-                    if t.get("positive", True):
-                        term.text.flag = indexer_pb2.NumberSearchTerm.SHOULD
-                    else:
-                        term.text.flag = indexer_pb2.NumberSearchTerm.NOT
+                if t.get('positive', True):
+                    term.text.flag = indexer_pb2.NumberSearchTerm.SHOULD
+                else:
+                    term.text.flag = indexer_pb2.NumberSearchTerm.NOT
 
         grpc_request.include_default_collection = True
 
@@ -105,37 +110,36 @@ class Search(View):
         elif collection_ids is not None:
             grpc_request.collections.extend(collection_ids)
 
-        if request.get("full_text"):
-            for v in request["full_text"]:
-                term = grpc_request.terms.add()
-                term.text.query = v
+        for v in params.get('full_text', []):
+            term = grpc_request.terms.add()
+            term.text.query = v
 
-        if request.get("date_range"):
-            date_range = request["date_range"]
+        if params.get('date_range'):
+            date_range = params['date_range']
 
             if not isinstance(date_range, (list, set)):
                 date_range = [date_range]
 
             if len(date_range) > 1:
                 term = grpc_request.terms.add()
-                term.number.field = "meta.yaer_max"
+                term.number.field = 'meta.yaer_max'
                 term.number.int_query = max(date_range)
                 term.number.flag = indexer_pb2.NumberSearchTerm.MUST
                 term.number.relation = indexer_pb2.NumberSearchTerm.LESS_EQ
 
             term = grpc_request.terms.add()
-            term.number.field = "meta.year_min"
+            term.number.field = 'meta.year_min'
             term.number.int_query = min(date_range)
             term.number.flag = indexer_pb2.NumberSearchTerm.MUST
             term.number.relation = indexer_pb2.NumberSearchTerm.GREATER_EQ
 
-        if request.get("aggregate"):
-            for field_name in request["aggregate"]:
-                grpc_request.aggregate.fields.extend([field_name])
-                grpc_request.aggregate.size = 250
+        for field_name in params.get('aggregate', []):
+            grpc_request.aggregate.fields.extend([field_name])
+            grpc_request.aggregate.size = 250
+            grpc_request.aggregate.use_query = True
 
-        if request.get("ids", False):
-            request_ids = request["ids"]
+        if params.get('ids', False):
+            request_ids = params['ids']
 
             if not isinstance(request_ids, (list, set)):
                 request_ids = list(request_ids)
@@ -146,45 +150,45 @@ class Search(View):
         if ids is not None:
             grpc_request.ids.extend(ids)
 
-        if request.get("query"):
-            for q in request["query"]:
-                if q.get("type") == "txt":
+        if params.get('query'):
+            for q in params['query']:
+                if q.get('type') == 'txt':
                     term = grpc_request.terms.add()
-                    term.image_text.query = q["value"]
+                    term.image_text.query = q['value']
 
                     plugins = term.image_text.plugins.add()
-                    plugins.name = "clip_embedding_feature"
+                    plugins.name = 'clip_embedding_feature'
                     plugins.weight = 1.0
                     # TODO: plugins.lang = lang
 
-                    if q.get("positive", True):
+                    if q.get('positive', True):
                         term.image_text.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
                     else:
                         term.image_text.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
 
-                elif q.get("type") == "idx":
+                elif q.get('type') == 'idx':
                     term = grpc_request.terms.add()
 
-                    image_id = q["value"]
+                    image_id = q['value']
                     roi_defined = False
 
-                    if q.get("roi"):
-                        roi = q.get("roi")
+                    if q.get('roi'):
+                        roi = q.get('roi')
                         roi_defined = True
 
-                        term.feature.image.roi.x = roi.get("x")
-                        term.feature.image.roi.y = roi.get("y")
-                        term.feature.image.roi.width = roi.get("width")
-                        term.feature.image.roi.height = roi.get("height")
+                        term.feature.image.roi.x = roi.get('x')
+                        term.feature.image.roi.y = roi.get('y')
+                        term.feature.image.roi.width = roi.get('width')
+                        term.feature.image.roi.height = roi.get('height')
 
                     image_path = os.path.join(
                         DjangoSettings.UPLOAD_ROOT,
                         image_id[0:2], image_id[2:4],
-                        f"{image_id}.jpg",
+                        f'{image_id}.jpg',
                     )
 
                     if os.path.exists(image_path):
-                        with open(image_path, "rb") as f:
+                        with open(image_path, 'rb') as f:
                             term.feature.image.encoded = f.read()
                     else:
                         # resubmit image from index
@@ -192,17 +196,17 @@ class Search(View):
                             image_path = os.path.join(
                                 DjangoSettings.MEDIA_ROOT,
                                 image_id[0:2], image_id[2:4],
-                                f"{image_id}.jpg",
+                                f'{image_id}.jpg',
                             )
 
                             if os.path.exists(image_path):
-                                with open(image_path, "rb") as f:
+                                with open(image_path, 'rb') as f:
                                     term.feature.image.encoded = f.read()
                         else:
-                            term.feature.image.id = q["value"]
+                            term.feature.image.id = q['value']
 
-                    if q.get("weights"):
-                        for k, v in q["weights"].items():
+                    if q.get('weights'):
+                        for k, v in q['weights'].items():
                             plugins = term.feature.plugins.add()
                             plugins.name = k.lower()
                             plugins.weight = v
@@ -212,22 +216,24 @@ class Search(View):
                             plugins.name = k.lower()
                             plugins.weight = v
 
-                    if q.get("positive", True):
+                    if q.get('positive', True):
                         term.feature.flag = indexer_pb2.ImageTextSearchTerm.POSITIVE
                     else:
                         term.feature.flag = indexer_pb2.ImageTextSearchTerm.NEGATIVE
 
                 grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_FEATURE
 
-        if request.get("random") and isinstance(request["random"], (int, float, str)):
+        if params.get('random') and isinstance(params['random'], (int, float, str)):
             grpc_request.sorting = indexer_pb2.SearchRequest.SORTING_RANDOM_FEATURE
-            grpc_request.random_seed = str(request["random"])
+            grpc_request.random_seed = str(params['random'])
 
         return grpc_request
 
-    def rpc_load(self, query, ids=None, collection_ids=None):
+    def rpc_load(self, params, ids=None, collection_ids=None):
         grpc_request = self.parse_search_request(
-            query, ids=ids, collection_ids=collection_ids
+            params,
+            ids=ids,
+            collection_ids=collection_ids,
         )
 
         grpc_request_bin = grpc_request.SerializeToString()
@@ -238,113 +244,81 @@ class Search(View):
         if response_cache is not None:
             return msgpack.unpackb(response_cache)
 
-        interceptors = (
-            RetryOnRpcErrorClientInterceptor(
-                max_attempts=4,
-                sleeping_policy=ExponentialBackoff(
-                    init_backoff_ms=100,
-                    max_backoff_ms=1600,
-                    multiplier=2,
-                ),
-                status_for_retry=(grpc.StatusCode.UNAVAILABLE,),
-            ),
-        )
-
-        channel = grpc.intercept_channel(
-            grpc.insecure_channel(
-                f"{DjangoSettings.GRPC_HOST}:{DjangoSettings.GRPC_PORT}",
-                options=[
-                    ("grpc.max_send_message_length", 50 * 1024 * 1024),
-                    ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-                ],
-            ),
-            *interceptors,
-        )
-
-        stub = indexer_pb2_grpc.IndexerStub(channel)
+        stub = indexer_pb2_grpc.IndexerStub(self.channel)
         response = stub.search(grpc_request)
 
         cache.set(response.id, grpc_request_hash)
 
-        return {"status": "ok", "job_id": response.id, "state": "pending"}
+        return {'job_id': response.id}
 
     def rpc_check_load(self, job_id, collections=None):
-        interceptors = (
-            RetryOnRpcErrorClientInterceptor(
-                max_attempts=4,
-                sleeping_policy=ExponentialBackoff(
-                    init_backoff_ms=100,
-                    max_backoff_ms=1600,
-                    multiplier=2,
-                ),
-                status_for_retry=(grpc.StatusCode.UNAVAILABLE,),
-            ),
-        )
-
-        channel = grpc.intercept_channel(
-            grpc.insecure_channel(
-                f"{DjangoSettings.GRPC_HOST}:{DjangoSettings.GRPC_PORT}",
-                options=[
-                    ("grpc.max_send_message_length", 50 * 1024 * 1024),
-                    ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-                ],
-            ),
-            *interceptors,
-        )
-
-        stub = indexer_pb2_grpc.IndexerStub(channel)
+        stub = indexer_pb2_grpc.IndexerStub(self.channel)
         request = indexer_pb2.ListSearchResultRequest(id=job_id)
 
         try:
             response = stub.list_search_result(request)
-            collection_ids = [c['hash_id'] for c in collections]
+
+            if collections is not None:
+                collection_ids = [c['hash_id'] for c in collections]
+            else:
+                collection_ids = []
 
             entries = []
 
             for e in response.entries:
-                entry = {"id": e.id}
+                entry = {
+                    'id': e.id,
+                    'meta': meta_from_proto(e.meta),
+                    'origin': meta_from_proto(e.origin),
+                    'classifier': classifier_from_proto(e.classifier),
+                    'feature': feature_from_proto(e.feature),
+                    'coordinates': list(e.coordinates),
+                    'distance': e.distance,
+                    'cluster': e.cluster,
+                    'padded': e.padded,
+                }
 
-                entry["meta"] = meta_from_proto(e.meta)
-                entry["origin"] = meta_from_proto(e.origin)
-                entry["classifier"] = classifier_from_proto(e.classifier)
-                entry["feature"] = feature_from_proto(e.feature)
-                entry["coordinates"] = list(e.coordinates)
-                entry["distance"] = e.distance
-                entry["cluster"] = e.cluster
-                entry["padded"] = e.padded
-
-                entry["collection"] = {
-                    "id": e.collection.id,
-                    "name": e.collection.name,
-                    "is_public": e.collection.is_public,
-                    "user": e.collection.id in collection_ids,
+                entry['collection'] = {
+                    'id': e.collection.id,
+                    'name': e.collection.name,
+                    'is_public': e.collection.is_public,
+                    'user': e.collection.id in collection_ids,
                 }
 
                 if e.collection.id in collection_ids:
-                    entry["preview"] = upload_url_to_preview(e.id)
-                    entry["path"] = upload_url_to_image(e.id)
+                    entry['path'] = upload_url_to_image(e.id)
+                    entry['preview'] = upload_url_to_image(e.id)
                 else:
-                    entry["preview"] = media_url_to_preview(e.id)
-                    entry["path"] = media_url_to_image(e.id)
+                    entry['path'] = media_url_to_image(e.id)
+                    entry['preview'] = media_url_to_preview(e.id)
 
                 entries.append(entry)
 
             aggregations = []
 
             for e in response.aggregate:
-                aggr = {"field": e.field_name, "entries": []}
+                aggr = {
+                    'field': e.field_name,
+                    'entries': [],
+                }
 
                 for x in e.entries:
-                    aggr["entries"].append({"name": x.key, "count": x.int_val})
+                    aggr['entries'].append({
+                        'name': x.key,
+                        'count': x.int_val,
+                    })
 
                 aggregations.append(aggr)
 
             if collections:
-                aggregations.append({"field": "collection", "entries": collections})
+                aggregations.append({
+                    'field': 'collection',
+                    'entries': collections,
+                })
 
             result = {
-                "status": "ok", "entries": entries,
-                "aggregations": aggregations, "state": "done",
+                'entries': entries,
+                'aggregations': aggregations,
             }
 
             request_hash = cache.get(job_id)
@@ -354,79 +328,73 @@ class Search(View):
                 cache.set(request_hash, msgpack.packb(result))
 
             return result
-        except grpc.RpcError as e:
-            # search is still running
-            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
-                return {"status": "ok", "job_id": job_id, "state": "pending"}
+        except grpc.RpcError as error:
+            if error.code() == grpc.StatusCode.FAILED_PRECONDITION:
+                return {'job_id': job_id}
 
-        return {"status": "error", "state": "done"}
+    def add_user_data(self, result, user):
+        images = ImageUserRelation.objects.filter(
+            image__hash_id__in=[x['id'] for x in result['entries']],
+            user=user,
+        )
+        user_lut = {x.image.hash_id: {'bookmarked': x.library} for x in images}
 
-    def add_user_data(self, entries, user):
-        ids = [x["id"] for x in entries["entries"]]
+        def map_data(entry):
+            return {
+                **entry,
+                'user': user_lut.get(entry['id'], {'bookmarked': False})
+            }
 
-        images = ImageUserRelation.objects.filter(image__hash_id__in=ids, user=user)
-        user_lut = {x.image.hash_id: {"bookmarked": x.library} for x in images}
+        result['entries'] = list(map(map_data, result['entries']))
 
-        def map_user_data(entry):
-            if entry["id"] in user_lut:
-                return {**entry, "user": user_lut[entry["id"]]}
+        return result
 
-            return {**entry, "user": {"bookmarked": False}}
-
-        entries["entries"] = list(map(map_user_data, entries["entries"]))
-
-        return entries
-
-    def post(self, request):
-        try:
-            body = request.body.decode("utf-8")
-        except (UnicodeDecodeError, AttributeError):
-            body = request.body
-
-        try:
-            data = json.loads(body)
-        except Exception as e:
-            raise BadRequest()
-
-        if "params" not in data:
-            raise BadRequest()
-
-        params = data["params"]
+    def post(self, request, format=None):
+        params = request.data['params']
         collections = None
         
         if request.user.is_authenticated:
             collections = [
                 {
-                    "hash_id": collection.hash_id,
-                    "name": collection.name,
-                    "count": collection.count,
+                    'hash_id': collection.hash_id,
+                    'name': collection.name,
+                    'count': collection.count,
                 }
-                for collection in Collection.objects\
-                    .filter(user=request.user)\
-                    .annotate(count=Count("image"))
+                for collection in Collection.objects \
+                    .filter(user=request.user) \
+                    .annotate(count=Count('image'))
             ]
 
-        if "job_id" in params:
-            response = self.rpc_check_load(params["job_id"], collections)
+        if params.get('job_id'):
+            result = self.rpc_check_load(params['job_id'], collections)
 
-            if "entries" in response and request.user.is_authenticated:
-                response = self.add_user_data(response, request.user)
+            if result.get('entries') and request.user.is_authenticated:
+                result = self.add_user_data(result, request.user)
 
-            return JsonResponse(response)
+            if result is None:
+                raise APIException('unknown_error')
+
+            return Response(result)
 
         image_ids = None
         collection_ids = None
 
-        if params.get("bookmarks", False):
+        if params.get('bookmarks', False):
             if not request.user.is_authenticated:
-                raise BadRequest("not_authenticated")
+                raise APIException('not_authenticated')
 
-            image_user_db = ImageUserRelation.objects.filter(user=request.user, library=True)
+            image_user_db = ImageUserRelation.objects.filter(
+                user=request.user,
+                library=True,
+            )
             image_ids = [x.image.hash_id for x in image_user_db]
 
         if collections:
             collection_ids = [c['hash_id'] for c in collections]
             
-        response = self.rpc_load(params, image_ids, collection_ids)
+        result = self.rpc_load(params, image_ids, collection_ids)
 
-        return JsonResponse(response)
+        if result is None:
+            raise APIException('unknown_error')
+
+        return Response(result)

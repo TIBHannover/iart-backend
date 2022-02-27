@@ -1,112 +1,64 @@
-import os
-import sys
 import json
-import uuid
 import logging
 import traceback
 
-import dateutil.parser
-
-import zipfile
-import tarfile
-
-from pathlib import Path
-
-
-import csv
-import json
-
-from django.views import View
-from django.http import HttpResponse, JsonResponse
-from django.conf import settings
-from django.db.models import Count
-
 from frontend.models import Image, ImageUserRelation
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.exceptions import APIException
 
 
-class BookmarkAdd(View):
-    def parse_request(self, request):
-        if "id" in request:
-            image_id = request["id"]
-        else:
-            return None
-
-        return {"image_id": image_id}
-
-    def post(self, request):
+class BookmarkAdd(APIView):
+    def post(self, request, format=None):
         if not request.user.is_authenticated:
-            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+            raise APIException('not_authenticated')
 
-        try:
-            body = request.body.decode("utf-8")
-        except (UnicodeDecodeError, AttributeError):
-            body = request.body
+        hash_id = request.data['params'].get('id')
 
-        try:
-            data = json.loads(body)
-        except Exception as e:
-            return JsonResponse({"status": "error"})
+        if hash_id is None:
+            raise APIException('unknown_error')
 
-        parsed_request = self.parse_request(data)
-        if parsed_request is None:
-            return JsonResponse({"status": "error"})
+        image, _ = Image.objects.get_or_create(hash_id=hash_id)
 
-        image_db, created = Image.objects.get_or_create(hash_id=parsed_request["image_id"])
+        image_user, _ = ImageUserRelation.objects.get_or_create(
+            user=request.user,
+            image=image,
+        )
+        image_user.library = True
+        image_user.save()
 
-        image_user_db, created = ImageUserRelation.objects.get_or_create(user=request.user, image=image_db)
-
-        image_user_db.library = True
-        image_user_db.save()
-
-        return JsonResponse({"status": "ok"})
+        return Response()
 
 
-class BookmarkRemove(View):
-    def parse_request(self, request):
-        if "id" in request:
-            image_id = request["id"]
-        else:
-            return None
-
-        return {"image_id": image_id}
-
-    def post(self, request):
+class BookmarkRemove(APIView):
+    def post(self, request, format=None):
         if not request.user.is_authenticated:
-            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+            raise APIException('not_authenticated')
 
-        try:
-            body = request.body.decode("utf-8")
-        except (UnicodeDecodeError, AttributeError):
-            body = request.body
+        hash_id = request.data['params'].get('id')
 
-        try:
-            data = json.loads(body)
-        except Exception as e:
-            return JsonResponse({"status": "error"})
+        if hash_id is None:
+            raise APIException('unknown_error')
 
-        parsed_request = self.parse_request(data)
-        if parsed_request is None:
-            return JsonResponse({"status": "error"})
+        image = Image.objects.get(hash_id=hash_id)
 
-        image_db = Image.objects.get(hash_id=parsed_request["image_id"])
+        image_user = ImageUserRelation.objects.filter(
+            user=request.user,
+            image=image,
+        )
+        image_user.update(library=False)
 
-        print(image_db, flush=True)
-
-        image_user_db = ImageUserRelation.objects.filter(user=request.user, image=image_db)
-        image_user_db.update(library=False)
-
-        return JsonResponse({"status": "ok"})
+        return Response()
 
 
-class BookmarkList(View):
-    def post(self, request):
+class BookmarkList(APIView):
+    def post(self, request, format=None):
         if not request.user.is_authenticated:
-            return JsonResponse({"status": "error", "error": {"type": "not_authenticated"}})
+            raise APIException('not_authenticated')
 
-        image_user_db = ImageUserRelation.objects.filter(user=request.user, library=True)
+        image_user = ImageUserRelation.objects.filter(
+            user=request.user,
+            library=True,
+        )
 
-        result = []
-        for x in image_user_db:
-            result.append({"id": x.image.hash_id})
-
-        return JsonResponse({"status": "ok", "data": result})
+        return Response([{'id': x.image.hash_id} for x in image_user])

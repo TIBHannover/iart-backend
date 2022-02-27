@@ -8,7 +8,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt install libmariadbclient-dev-compat image
 RUN pip install poetry
 
 COPY pyproject.toml poetry.lock /api/
-RUN cd /api; poetry export -f requirements.txt > requirements.txt
+RUN cd /api; poetry export -f requirements.txt > requirements.txt  --without-hashes
 RUN cd /api; pip install -r requirements.txt
 RUN cd /api; pip install wand
 

@@ -1,7 +1,6 @@
+from .get import Get
 from .search import Search
 from .upload import Upload
-from .collection import CollectionUpload, CollectionList, CollectionDelete
-from .user import get_csrf_token, login, logout, register, GetUser
+from .user import get_csrf_token, Login, Logout, Register, User
 from .bookmark import BookmarkAdd, BookmarkRemove, BookmarkList
-
-from .get import Get
+from .collection import CollectionAdd, CollectionRemove, CollectionList

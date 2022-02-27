@@ -52,7 +52,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 ]
 
-REST_FRAMEWORK = {"DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework.authentication.SessionAuthentication",)}
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework.authentication.SessionAuthentication",),
+    "EXCEPTION_HANDLER": "frontend.exceptions.utils.custom_exception_handler",
+}
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -173,6 +176,9 @@ STATIC_URL = FORCE_SCRIPT_NAME + "/static/"
 MEDIA_ROOT = os.path.join("/data/media/")
 UPLOAD_ROOT = os.path.join("/data/upload/")
 
+MEDIA_URL = FORCE_SCRIPT_NAME + "media/"
+UPLOAD_URL = FORCE_SCRIPT_NAME + "upload/"
+
 GRPC_HOST = "localhost"
 GRPC_PORT = 50051
 
@@ -182,12 +188,11 @@ INDEXER_PATH = "/indexer"
 
 try:
     from .user_settings import *
-
 except:
     pass
 
-MEDIA_URL = FORCE_SCRIPT_NAME + "media/"
-UPLOAD_URL = FORCE_SCRIPT_NAME + "uploaded/"
-
-# the last resolution will use for indexing
-IMAGE_RESOLUTIONS = [{"min_dim": 200, "suffix": "_m"}, {"min_dim": 1080, "suffix": ""}]
+# last resolution is used for indexing
+IMAGE_RESOLUTIONS = [
+    {"min_dim": 200, "suffix": "_m"},
+    {"min_dim": 1080, "suffix": ""},
+]
