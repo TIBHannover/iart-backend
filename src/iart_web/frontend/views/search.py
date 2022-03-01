@@ -72,8 +72,10 @@ class Search(RPCView):
         if cluster.get('n', 1) > 1:
             if cluster.get('type') == 'agglomerative':
                 grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_AGGLOMERATIVE
-            else:
+            elif cluster.get('type') == 'kmeans':
                 grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_KMEANS
+            else:
+                grpc_request.clustering = indexer_pb2.SearchRequest.CLUSTERING_GM
 
             option = grpc_request.clustering_options.add()
             option.key = 'k'
@@ -106,7 +108,6 @@ class Search(RPCView):
 
         if user_collection_ids:
             grpc_request.collections.extend(list(user_collection_ids))
-            grpc_request.include_default_collection = False
         elif collection_ids is not None:
             grpc_request.collections.extend(collection_ids)
 
