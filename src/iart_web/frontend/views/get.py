@@ -5,6 +5,7 @@ import logging
 
 from .utils import RPCView
 from django.conf import settings
+from django.conf import settings as DjangoSettings
 from rest_framework.response import Response
 from rest_framework.exceptions import APIException
 from frontend.models import UploadedImage, ImageUserRelation
@@ -14,6 +15,10 @@ from frontend.utils import (
     upload_url_to_image,
     upload_url_to_preview,
 )
+
+if DjangoSettings.INDEXER_PATH is not None:
+    sys.path.append(DjangoSettings.INDEXER_PATH)
+
 
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
 from iart_indexer.utils import (

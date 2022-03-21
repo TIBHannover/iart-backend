@@ -19,6 +19,10 @@ from frontend.utils import (
     upload_url_to_image,
 )
 
+if DjangoSettings.INDEXER_PATH is not None:
+    sys.path.append(DjangoSettings.INDEXER_PATH)
+
+
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
 from iart_indexer.utils import (
     meta_from_proto,
@@ -28,9 +32,6 @@ from iart_indexer.utils import (
 )
 
 logger = logging.getLogger(__name__)
-
-if DjangoSettings.INDEXER_PATH is not None:
-    sys.path.append(DjangoSettings.INDEXER_PATH)
 
 
 class Search(RPCView):
@@ -332,6 +333,8 @@ class Search(RPCView):
         except grpc.RpcError as error:
             if error.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 return {'job_id': job_id}
+        
+        return None
 
     def add_user_data(self, result, user):
         images = ImageUserRelation.objects.filter(
@@ -369,11 +372,12 @@ class Search(RPCView):
         if params.get('job_id'):
             result = self.rpc_check_load(params['job_id'], collections)
 
+            if result is None:
+                raise APIException('unknown_error')
+
             if result.get('entries') and request.user.is_authenticated:
                 result = self.add_user_data(result, request.user)
 
-            if result is None:
-                raise APIException('unknown_error')
 
             return Response(result)
 

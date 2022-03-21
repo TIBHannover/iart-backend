@@ -27,11 +27,12 @@ from frontend.utils import (
     check_extension,
     unflat_dict,
 )
-
-from iart_indexer import indexer_pb2, indexer_pb2_grpc
-
 if settings.INDEXER_PATH is not None:
     sys.path.append(settings.INDEXER_PATH)
+    
+from iart_indexer import indexer_pb2, indexer_pb2_grpc
+
+
 
 logger = logging.getLogger(__name__)
 

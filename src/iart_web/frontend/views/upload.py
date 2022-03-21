@@ -16,55 +16,75 @@ from rest_framework.exceptions import APIException
 from frontend.models import UploadedImage
 from frontend.utils import (
     image_normalize,
+    image_resize,
     download_url,
     download_file,
     upload_url_to_image,
     upload_url_to_preview,
 )
 
-logger = logging.getLogger(__name__)
 
+import PIL.Image
+PIL.Image.warnings.simplefilter('error', PIL.Image.DecompressionBombError)  # turn off Decompression bomb error
+PIL.Image.warnings.simplefilter('error', PIL.Image.DecompressionBombWarning)  # turn off Decompression bomb warning
+PIL.Image.MAX_IMAGE_PIXELS = 1000000000  # set max pixel up high
+
+logger = logging.getLogger(__name__)
 
 class Upload(APIView):
     def post(self, request, format=None):
         image_id = uuid.uuid4().hex
-
-        if request.data.get('file'):
+        logger.info(f"Upload start: request.data.file:'{request.data.get('file')}' request.data.url:'{request.data.get('url')}'")
+        if request.data.get("file"):
             tmp_dir = tempfile.mkdtemp()
 
             image_result = download_file(
                 output_dir=tmp_dir,
                 output_name=image_id,
-                file=request.data['file'],
-                max_size=5 * 1024 * 1024,
+                file=request.data["file"],
+                max_size=20 * 1024 * 1024,
                 extensions=(
-                    '.gif', '.jpg', '.png',
-                    '.tif', '.tiff', '.bmp',
+                    ".gif",
+                    ".jpg",
+                    ".jpeg",
+                    ".jpe",
+                    ".png",
+                    ".tif",
+                    ".tiff",
+                    ".bmp",
+                    ".webp"
                 ),
             )
-        elif request.data.get('url'):
+        elif request.data.get("url"):
             tmp_dir = tempfile.mkdtemp()
-
             image_result = download_url(
                 output_dir=tmp_dir,
                 output_name=image_id,
-                url=request.data['url'],
-                max_size=5 * 1024 * 1024,
+                url=request.data["url"],
+                max_size=20 * 1024 * 1024,
                 extensions=(
-                    '.gif', '.jpg', '.png',
-                    '.tif', '.tiff', '.bmp',
+                    ".gif",
+                    ".jpg",
+                    ".jpeg",
+                    ".jpe",
+                    ".png",
+                    ".tif",
+                    ".tiff",
+                    ".bmp",
+                    ".webp"
                 ),
             )
         else:
             image_result = {
-                'status': 'error',
-                'error': {
-                    'type': 'unknown_error',
+                "status": "error",
+                "error": {
+                    "type": "unknown_error",
                 },
             }
 
-        if image_result['status'] != 'ok':
-            raise APIException(image_result['error']['type'])
+        if image_result["status"] != "ok":
+            logger.error(f"Upload failed. image_result:'{image_result}' request.data.file:'{request.data.get('file')}' request.data.url:'{request.data.get('url')}'")
+            raise APIException(image_result["error"]["type"])
 
         output_dir = os.path.join(
             settings.UPLOAD_ROOT,
@@ -73,38 +93,48 @@ class Upload(APIView):
         )
         os.makedirs(output_dir, exist_ok=True)
 
-        output_path = os.path.join(output_dir, f'{image_id}.jpg')
+        output_path = os.path.join(output_dir, f"{image_id}.jpg")
 
         try:
-            with Image(filename=image_result['path']) as img:
-                img.format = 'jpeg'
+            with Image(filename=image_result["path"]) as img:
+                img.format = "jpeg"
                 img.save(filename=output_path)
 
-            image = imageio.imread(image_result['path'])
+            image = imageio.imread(image_result["path"])
             image = image_normalize(image)
-        except:
-            raise APIException('file_is_not_readable')
+            image = image_resize(image, max_dim=1024)
+        except Exception as e:
+            logging.error(e)
+            logger.error(f"Upload failed. image_result:'{image_result}' request.data.file:'{request.data.get('file')}' request.data.url:'{request.data.get('url')}' exception:'{e}'")
+
+            raise APIException("file_is_not_readable")
 
         try:
             if image is not None:
                 imageio.imwrite(output_path, image)
 
                 image_db, created = UploadedImage.objects.get_or_create(
-                    name=image_result['origin'],
+                    name=image_result["origin"],
                     hash_id=image_id,
                 )
 
-                return Response({
-                    'entries': [{
-                        'id': image_id,
-                        'meta': {
-                            'title': image_result['origin'],
-                        },
-                        'path': upload_url_to_image(image_id),
-                        'preview': upload_url_to_image(image_id),
-                    }],
-                })
+                return Response(
+                    {
+                        "entries": [
+                            {
+                                "id": image_id,
+                                "meta": {
+                                    "title": image_result["origin"],
+                                },
+                                "path": upload_url_to_image(image_id),
+                                "preview": upload_url_to_image(image_id),
+                            }
+                        ],
+                    }
+                )
         except Exception as error:
+
+            logger.error(f"Upload failed. image_result:'{image_result}' request.data.file:'{request.data.get('file')}' request.data.url:'{request.data.get('url')}' exception:'{e}'")
             logger.error(traceback.format_exc())
 
-        raise APIException('unknown_error')
+        raise APIException("unknown_error")
