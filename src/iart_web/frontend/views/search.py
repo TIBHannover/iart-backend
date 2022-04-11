@@ -31,6 +31,8 @@ from iart_indexer.utils import (
     suggestions_from_proto,
 )
 
+from google.protobuf.json_format import MessageToJson
+
 logger = logging.getLogger(__name__)
 
 
@@ -105,12 +107,18 @@ class Search(RPCView):
                 else:
                     term.text.flag = indexer_pb2.NumberSearchTerm.NOT
 
-        grpc_request.include_default_collection = True
-
+        print(f"Search Collections: {user_collection_ids} {collection_ids}", flush=True)
         if user_collection_ids:
             grpc_request.collections.extend(list(user_collection_ids))
+
+            print(f"Search Collections: A", flush=True)
         elif collection_ids is not None:
             grpc_request.collections.extend(collection_ids)
+            grpc_request.include_default_collection = True        
+            print(f"Search Collections: B", flush=True)
+        else:
+            grpc_request.include_default_collection = True       
+            print(f"Search Collections: C", flush=True)
 
         for v in params.get('full_text', []):
             term = grpc_request.terms.add()
@@ -237,6 +245,7 @@ class Search(RPCView):
             ids=ids,
             collection_ids=collection_ids,
         )
+        logger.info(f"Search::rpc_load parse_search_request:'{MessageToJson(grpc_request)}'")
 
         grpc_request_bin = grpc_request.SerializeToString()
         grpc_request_hash = hashlib.sha256(grpc_request_bin).hexdigest()
@@ -333,7 +342,11 @@ class Search(RPCView):
         except grpc.RpcError as error:
             if error.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 return {'job_id': job_id}
-        
+            else:
+                logger.error(f"Search::rpc_check_load exception:'{error}'")
+        except Exception as e:
+            logger.error(f"Search::rpc_check_load exception:'{e}'")
+
         return None
 
     def add_user_data(self, result, user):
