@@ -175,6 +175,7 @@ STATIC_URL = FORCE_SCRIPT_NAME + "/static/"
 
 MEDIA_ROOT = os.path.join("/data/media/")
 UPLOAD_ROOT = os.path.join("/data/upload/")
+IMAGE_EXT = "jpg"
 
 MEDIA_URL = FORCE_SCRIPT_NAME + "media/"
 UPLOAD_URL = FORCE_SCRIPT_NAME + "upload/"
@@ -209,6 +210,7 @@ config_lut = {
     "grpc_host": "GRPC_HOST",
     "grpc_port": "GRPC_PORT",
     "image_resolutions": "IMAGE_RESOLUTIONS",
+    "image_ext": "IMAGE_EXT",
 }
 
 config_path = os.environ.get("IART_BACKEND_CONFIG")

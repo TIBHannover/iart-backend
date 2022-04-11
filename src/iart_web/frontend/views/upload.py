@@ -31,6 +31,13 @@ PIL.Image.MAX_IMAGE_PIXELS = 1000000000  # set max pixel up high
 
 logger = logging.getLogger(__name__)
 
+import PIL.Image
+
+PIL.Image.warnings.simplefilter("error", PIL.Image.DecompressionBombError)  # turn off Decompression bomb error
+PIL.Image.warnings.simplefilter("error", PIL.Image.DecompressionBombWarning)  # turn off Decompression bomb warning
+PIL.Image.MAX_IMAGE_PIXELS = 1000000000  # set max pixel up high
+
+
 class Upload(APIView):
     def post(self, request, format=None):
         image_id = uuid.uuid4().hex
@@ -38,6 +45,7 @@ class Upload(APIView):
         if request.data.get("file"):
             tmp_dir = tempfile.mkdtemp()
 
+            print("B", flush=True)
             image_result = download_file(
                 output_dir=tmp_dir,
                 output_name=image_id,
@@ -86,6 +94,7 @@ class Upload(APIView):
             logger.error(f"Upload failed. image_result:'{image_result}' request.data.file:'{request.data.get('file')}' request.data.url:'{request.data.get('url')}'")
             raise APIException(image_result["error"]["type"])
 
+        print("D", flush=True)
         output_dir = os.path.join(
             settings.UPLOAD_ROOT,
             image_id[0:2],
@@ -93,8 +102,9 @@ class Upload(APIView):
         )
         os.makedirs(output_dir, exist_ok=True)
 
-        output_path = os.path.join(output_dir, f"{image_id}.jpg")
+        output_path = os.path.join(output_dir, f"{image_id}.{settings.IMAGE_EXT}")
 
+        print("E", flush=True)
         try:
             with Image(filename=image_result["path"]) as img:
                 img.format = "jpeg"
