@@ -12,7 +12,7 @@ import mimetypes
 def check_extension(filename: Path, extensions: list):
     if isinstance(filename, str):
         filename = Path(filename)
-    extension = "".join(filename.suffixes)
+    extension = "".join(filename.suffixes[-1:])
     extension.lower()
     return extension in extensions
 
