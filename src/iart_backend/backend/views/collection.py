@@ -283,7 +283,7 @@ class CollectionAdd(APIView):
                 output_dir=output_dir,
                 output_name=collection_id,
                 file=request.data["image"],
-                max_size=200 * 1024 * 1024,
+                max_size=1000 * 1024 * 1024,
                 extensions=(
                     ".zip",
                     ".tar",
