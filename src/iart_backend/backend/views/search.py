@@ -241,13 +241,29 @@ class Search(RPCView):
 
         return grpc_request
 
-    def rpc_load(self, params, ids=None, collection_ids=None):
+    def rpc_load(self, params, ids=None, collection_ids=None, user=None):
         grpc_request = self.parse_search_request(
             params,
             ids=ids,
             collection_ids=collection_ids,
         )
         logger.info(f"Search::rpc_load parse_search_request:'{MessageToJson(grpc_request)}'")
+
+        for collection_id in grpc_request.collections:
+            try:
+                collection_db = Collection.objects.get(hash_id = collection_id)
+            except Collection.DoesNotExist:
+                logger.error(f"Search::rpc_load collection is not known")
+                return None
+
+            if user is None and collection_db.visibility != "V":
+                logger.error(f"Search::rpc_load collection is not visible")
+                return None
+
+            if user and collection_db.user != user and collection_db.visibility == "U":
+                logger.error(f"Search::rpc_load collection is from another user")
+                return None
+
 
         grpc_request_bin = grpc_request.SerializeToString()
         grpc_request_hash = hashlib.sha256(grpc_request_bin).hexdigest()
@@ -410,7 +426,7 @@ class Search(RPCView):
         if collections:
             collection_ids = [c["hash_id"] for c in collections]
 
-        result = self.rpc_load(params, image_ids, collection_ids)
+        result = self.rpc_load(params, image_ids, collection_ids, request.user)
 
         if result is None:
             raise APIException("unknown_error")

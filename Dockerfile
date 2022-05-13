@@ -27,6 +27,7 @@ RUN pip install grpcio-tools
 RUN pip install tqdm
 RUN pip install msgpack
 RUN pip install django_rename_app
+RUN pip install gunicorn
 
 
 # RUN pip install poetry
@@ -44,5 +45,7 @@ RUN pip install django_rename_app
 COPY /src /app/
 COPY /indexer/src/  /app/
 
+COPY /config.json  /app/
+
 ENV PYTHONPATH=/app
-USER 1000:1000
+# USER 1000:1000
