@@ -275,9 +275,11 @@ class Search(RPCView):
 
         stub = indexer_pb2_grpc.IndexerStub(self.channel)
         response = stub.search(grpc_request)
-
-        cache.set(response.id, grpc_request_hash)
-
+        try:
+            cache.set(response.id, grpc_request_hash)
+        except Exception as e:
+            logger.error("Search::rpc_load cache set error {e}")
+            pass
         return {"job_id": response.id}
 
     def rpc_check_load(self, job_id, collections=None):

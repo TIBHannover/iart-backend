@@ -1,6 +1,7 @@
 import os
-
+import re
 from pathlib import Path
+
 import PIL
 import requests
 from urllib.parse import unquote
@@ -12,9 +13,12 @@ import mimetypes
 def check_extension(filename: Path, extensions: list):
     if isinstance(filename, str):
         filename = Path(filename)
-    extension = "".join(filename.suffixes[-1:])
-    extension.lower()
-    return extension in extensions
+    extension = "".join(filename.suffixes)
+    extension = extension.lower()
+    for ext in extensions:
+        if extension.endswith(ext):
+            return True
+    return False
 
 
 def download_file(file, output_dir, output_name=None, max_size=None, extensions=None):
