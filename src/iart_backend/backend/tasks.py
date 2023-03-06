@@ -7,7 +7,7 @@ import logging
 
 from celery import shared_task
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.exceptions import BadRequest
 from backend.models import Collection, Image
 from backend.utils import TarArchive, ZipArchive, check_extension
@@ -34,8 +34,8 @@ def collection_upload(self, args):
         visibility = "U"
 
     try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
+        user = get_user_model().objects.get(pk=user_id)
+    except get_user_model().DoesNotExist:
         raise BadRequest("unknown_user")
 
     collection = Collection.objects.create(

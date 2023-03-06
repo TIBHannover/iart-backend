@@ -1,10 +1,14 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 
 
+class CustomUser(AbstractUser):
+    is_oidc = models.BooleanField(default=False)
+
+
 class Collection(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     hash_id = models.CharField(max_length=256)
     name = models.CharField(max_length=256)
     visibility = models.CharField(
@@ -16,7 +20,7 @@ class Collection(models.Model):
 
 
 class Image(models.Model):
-    owner = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.CASCADE)
     collection = models.ForeignKey(Collection, blank=True, null=True, on_delete=models.CASCADE)
     hash_id = models.CharField(max_length=256)
 
@@ -28,7 +32,7 @@ class UploadedImage(models.Model):
 
 
 class ImageUserRelation(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     image = models.ForeignKey(Image, on_delete=models.CASCADE)
     date = models.DateTimeField(auto_now_add=True)
     # TODO on delete
