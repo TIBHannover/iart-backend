@@ -28,6 +28,7 @@ RUN pip install tqdm
 RUN pip install msgpack
 RUN pip install django_rename_app
 RUN pip install gunicorn
+RUN pip install mozilla-django-oidc
 
 
 # RUN pip install poetry
