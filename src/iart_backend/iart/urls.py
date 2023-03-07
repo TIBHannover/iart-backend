@@ -22,7 +22,7 @@ from mozilla_django_oidc.views import OIDCAuthenticationCallbackView
 urlpatterns = [
     path("", include("backend.urls")),
     path("admin/", admin.site.urls),
-    path('api/oidc/', include('mozilla_django_oidc.urls')),
+    path('oidc/', include('mozilla_django_oidc.urls')),
     path('api/oidc/callback', OIDCAuthenticationCallbackView.as_view(), name='oidc_callback'),
     path('oidc/callback', OIDCAuthenticationCallbackView.as_view(), name='oidc_callback_internal'),
 ]
