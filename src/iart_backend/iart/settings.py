@@ -127,6 +127,9 @@ OIDC_RP_SIGN_ALGO = "RS256"
 LOGIN_REDIRECT_URL = 'http://service.tib.eu/fid-bau-image-search'
 LOGOUT_REDIRECT_URL = 'http://service.tib.eu/fid-bau-image-search'
 OIDC_OP_JWKS_ENDPOINT = 'https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/certs'
+OIDC_AUTHENTICATION_CALLBACK_URL = 'https://service.tib.eu/fid-bau-image-search/api/oidc/callback'
+OIDC_AUTHENTICATION_CALLBACK_URL = 'oidc_callback'
+USE_X_FORWARDED_HOST = True
 
 
 # Password validation
