@@ -177,7 +177,7 @@ LOGGING = {
         },
         'mozilla_django_oidc': {
             'handlers': ['console'],
-            'level': 'DEBUG'
+            'level': 'INFO'
         },
     },
 }
