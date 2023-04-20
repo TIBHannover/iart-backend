@@ -367,9 +367,9 @@ class Search(RPCView):
             if error.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 return {"job_id": job_id}
             else:
-                logger.error(f"Search::rpc_check_load exception:'{error}'")
+                logger.exception(f"Search::rpc_check_load exception:'{error}'")
         except Exception as e:
-            logger.error(f"Search::rpc_check_load exception:'{e}'")
+            logger.exception(f"Search::rpc_check_load exception:'{e}'")
 
         return None
 
