@@ -56,101 +56,110 @@ class Command(BaseCommand):
             visibility=visibility,
         )
         collection_db.save()
+        try:
         
-        channel = grpc.insecure_channel(
-            f"{settings.GRPC_HOST}:{settings.GRPC_PORT}",
-            options=[
-                ("grpc.max_send_message_length", 50 * 1024 * 1024),
-                ("grpc.max_receive_message_length", 50 * 1024 * 1024),
-            ],
-        )
+            channel = grpc.insecure_channel(
+                f"{settings.GRPC_HOST}:{settings.GRPC_PORT}",
+                options=[
+                    ("grpc.max_send_message_length", 50 * 1024 * 1024),
+                    ("grpc.max_receive_message_length", 50 * 1024 * 1024),
+                ],
+            )
 
-        stub = indexer_pb2_grpc.IndexerStub(channel)
-        def entry_generator(entries, collection_id, collection_name, visibility):
-            for i, entry in enumerate(entries):
-                print(i,entry["id"], flush=True)
-                request = indexer_pb2.IndexingRequest()
-                request_image = request.image
-                request_image.id = entry["id"]
+            stub = indexer_pb2_grpc.IndexerStub(channel)
+            def entry_generator(entries, collection_id, collection_name, visibility):
+                for i, entry in enumerate(entries):
+                    print(i,entry["id"], flush=True)
+                    request = indexer_pb2.IndexingRequest()
+                    request_image = request.image
+                    request_image.id = entry["id"]
 
-                for k, v in entry.get("meta", {}).items():
-                    if isinstance(v, (list, set)):
-                        for v_1 in v:
+                    for k, v in entry.get("meta", {}).items():
+                        if isinstance(v, (list, set)):
+                            for v_1 in v:
+                                meta_field = request_image.meta.add()
+                                meta_field.key = k
+
+                                if isinstance(v_1, int):
+                                    meta_field.int_val = v_1
+                                elif isinstance(v_1, float):
+                                    meta_field.float_val = v_1
+                                elif isinstance(v_1, str):
+                                    meta_field.string_val = v_1
+                        else:
                             meta_field = request_image.meta.add()
                             meta_field.key = k
 
-                            if isinstance(v_1, int):
-                                meta_field.int_val = v_1
-                            elif isinstance(v_1, float):
-                                meta_field.float_val = v_1
-                            elif isinstance(v_1, str):
-                                meta_field.string_val = v_1
-                    else:
-                        meta_field = request_image.meta.add()
-                        meta_field.key = k
+                            if isinstance(v, int):
+                                meta_field.int_val = v
+                            elif isinstance(v, float):
+                                meta_field.float_val = v
+                            elif isinstance(v, str):
+                                meta_field.string_val = v
 
-                        if isinstance(v, int):
-                            meta_field.int_val = v
-                        elif isinstance(v, float):
-                            meta_field.float_val = v
-                        elif isinstance(v, str):
-                            meta_field.string_val = v
+                    for k, v in entry.get("origin", {}).items():
+                        if isinstance(v, (list, set)):
+                            for v_1 in v:
+                                origin_field = request_image.origin.add()
+                                origin_field.key = k
 
-                for k, v in entry.get("origin", {}).items():
-                    if isinstance(v, (list, set)):
-                        for v_1 in v:
+                                if isinstance(v_1, int):
+                                    origin_field.int_val = v_1
+                                elif isinstance(v_1, float):
+                                    origin_field.float_val = v_1
+                                elif isinstance(v_1, str):
+                                    origin_field.string_val = v_1
+                        else:
                             origin_field = request_image.origin.add()
                             origin_field.key = k
 
-                            if isinstance(v_1, int):
-                                origin_field.int_val = v_1
-                            elif isinstance(v_1, float):
-                                origin_field.float_val = v_1
-                            elif isinstance(v_1, str):
-                                origin_field.string_val = v_1
-                    else:
-                        origin_field = request_image.origin.add()
-                        origin_field.key = k
+                            if isinstance(v, int):
+                                origin_field.int_val = v
+                            elif isinstance(v, float):
+                                origin_field.float_val = v
+                            elif isinstance(v, str):
+                                origin_field.string_val = v
 
-                        if isinstance(v, int):
-                            origin_field.int_val = v
-                        elif isinstance(v, float):
-                            origin_field.float_val = v
-                        elif isinstance(v, str):
-                            origin_field.string_val = v
+                    collection = request_image.collection
+                    collection.id = collection_id
+                    collection.name = collection_name
+                    collection.is_public = visibility == "V"
+                    if not os.path.exists(entry["path"]):
+                        print("skip", flush=True)
+                        continue
+                    request_image.encoded = open(entry["path"], "rb").read()
 
-                collection = request_image.collection
-                collection.id = collection_id
-                collection.name = collection_name
-                collection.is_public = visibility == "V"
-                if not os.path.exists(entry["path"]):
-                    print("skip", flush=True)
-                    continue
-                request_image.encoded = open(entry["path"], "rb").read()
+                    
+                    image_db = Image.objects.create(
+                        collection=collection_db,
+                        owner=user_db,
+                        hash_id=entry["id"],
+                    )
+                    image_db.save()
+                    yield request
 
-                yield request
+            gen_iter = entry_generator(
+                entries,
+                collection_db.hash_id,
+                collection_name,
+                visibility,
+            )
+            count = 0
 
-        gen_iter = entry_generator(
-            entries,
-            collection_db.hash_id,
-            collection_name,
-            visibility,
-        )
-        count = 0
+            # print(next(gen_iter))
+            # return
+            for i, entry in enumerate(stub.indexing(gen_iter)):
+                count += 1
 
-        # print(next(gen_iter))
-        # return
-        for i, entry in enumerate(stub.indexing(gen_iter)):
-            count += 1
+                collection_db.progress = count / len(entries)
+                collection_db.save()
 
-            collection_db.progress = count / len(entries)
+            collection_db.progress = 1.0
+            if count > 0:
+                collection_db.status = "R"
+                collection_db.save()
+
+                return {"status": "ok"}
+        except:
+            collection_db.status = "E"
             collection_db.save()
-
-        if len(entries) == count:
-            collection_db.status = "R"
-            collection_db.save()
-
-            return {"status": "ok"}
-
-        collection_db.status = "E"
-        collection_db.save()
