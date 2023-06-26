@@ -117,6 +117,7 @@ AUTH_USER_MODEL = 'backend.CustomUser'
 # Open ID login
 AUTHENTICATION_BACKENDS = (
     'iart.oidc_authentication_backend.OIDCAB_USERNAME',
+    'django.contrib.auth.backends.ModelBackend'
 )
 OIDC_RP_CLIENT_ID = 'iart'
 OIDC_RP_CLIENT_SECRET = ''
