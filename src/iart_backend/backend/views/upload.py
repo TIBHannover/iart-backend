@@ -10,9 +10,11 @@ import traceback
 from wand.image import Image
 from urllib.parse import urlparse
 from django.conf import settings
+import PIL.Image
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import APIException
+
 from backend.models import UploadedImage
 from backend.utils import (
     image_normalize,
@@ -22,21 +24,14 @@ from backend.utils import (
     upload_url_to_image,
     upload_url_to_preview,
 )
+from backend.tasks import remove_upload_image
 
-
-import PIL.Image
 
 PIL.Image.warnings.simplefilter("error", PIL.Image.DecompressionBombError)  # turn off Decompression bomb error
 PIL.Image.warnings.simplefilter("error", PIL.Image.DecompressionBombWarning)  # turn off Decompression bomb warning
 PIL.Image.MAX_IMAGE_PIXELS = 1000000000  # set max pixel up high
 
 logger = logging.getLogger(__name__)
-
-import PIL.Image
-
-PIL.Image.warnings.simplefilter("error", PIL.Image.DecompressionBombError)  # turn off Decompression bomb error
-PIL.Image.warnings.simplefilter("error", PIL.Image.DecompressionBombWarning)  # turn off Decompression bomb warning
-PIL.Image.MAX_IMAGE_PIXELS = 1000000000  # set max pixel up high
 
 
 class Upload(APIView):
@@ -110,10 +105,12 @@ class Upload(APIView):
             if image is not None:
                 imageio.imwrite(output_path, image)
 
-                image_db, created = UploadedImage.objects.get_or_create(
+                UploadedImage.objects.get_or_create(
                     name=image_result["origin"],
                     hash_id=image_id,
                 )
+                remove_upload_image.apply_async((output_path, image_id),
+                                                countdown=60*60*12)
 
                 return Response(
                     {

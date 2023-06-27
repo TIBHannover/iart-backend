@@ -9,7 +9,7 @@ from celery import shared_task
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import BadRequest
-from backend.models import Collection, Image
+from backend.models import Collection, Image, UploadedImage
 from backend.utils import TarArchive, ZipArchive, check_extension
 
 from iart_indexer import indexer_pb2, indexer_pb2_grpc
@@ -192,3 +192,10 @@ def collection_upload(self, args):
     collection.save()
 
     raise BadRequest()
+
+
+@shared_task
+def remove_upload_image(path: str, img_hash: str):
+    logging.info(f'Removing uploaded image: {path}')
+    UploadedImage.objects.delete(hash_id=img_hash)
+    os.remove(path)
