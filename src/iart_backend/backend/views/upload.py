@@ -129,11 +129,9 @@ class Upload(APIView):
                         ],
                     }
                 )
-        except Exception as error:
-
-            logger.error(
-                f"Upload failed. image_result:'{image_result}' request.data.file:'{request.data.get('file')}' request.data.url:'{request.data.get('url')}' exception:'{e}'"
+        except Exception:
+            logger.exception(
+                f"Upload failed. image_result:'{image_result}' request.data.file:'{request.data.get('file')}' request.data.url:'{request.data.get('url')}'"
             )
-            logger.error(traceback.format_exc())
 
         raise APIException("unknown_error")
