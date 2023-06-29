@@ -125,13 +125,11 @@ OIDC_OP_AUTHORIZATION_ENDPOINT = "https://idm.ulb.tu-darmstadt.de/realms/fid-bau
 OIDC_OP_TOKEN_ENDPOINT = "https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/token"
 OIDC_OP_USER_ENDPOINT = "https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/userinfo"
 OIDC_RP_SIGN_ALGO = "RS256"
-LOGIN_REDIRECT_URL = 'http://service.tib.eu/fid-bau-image-search'
-LOGOUT_REDIRECT_URL = 'http://service.tib.eu/fid-bau-image-search'
+LOGIN_REDIRECT_URL = 'https://imagesearch.fid-bau.de'
+LOGOUT_REDIRECT_URL = 'https://imagesearch.fid-bau.de'
 OIDC_OP_JWKS_ENDPOINT = 'https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/certs'
-OIDC_AUTHENTICATION_CALLBACK_URL = 'https://service.tib.eu/fid-bau-image-search/api/oidc/callback'
 OIDC_AUTHENTICATION_CALLBACK_URL = 'oidc_callback'
 USE_X_FORWARDED_HOST = True
-
 
 # Password validation
 # https://docs.djangoproject.com/en/2.1/ref/settings/#auth-password-validators
