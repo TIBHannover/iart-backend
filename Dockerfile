@@ -43,7 +43,7 @@ RUN pip install gunicorn
 # RUN cd /api/indexer; pip install -r requirements.txt 
 
 COPY /src /app/
-COPY /indexer/src/  /app/
+# COPY /indexer/src/  /app/
 
 COPY /config.json  /app/
 
