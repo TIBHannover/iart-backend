@@ -109,8 +109,8 @@ class CollectionAdd(APIView):
                 else:
                     entry[field] = value
 
-            if not entry.get("file"):
-                entry["file"] = f'{entry["id"]}.jpg'
+        if not entry.get("file"):
+            entry["file"] = f'{entry["id"]}.jpg'
 
         return entry
 

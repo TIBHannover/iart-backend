@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_rename_app",
+    'mozilla_django_oidc',
 ]
 
 REST_FRAMEWORK = {
@@ -65,6 +66,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "mozilla_django_oidc.middleware.SessionRefresh",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -110,7 +112,24 @@ DATABASES = {
         "PORT": 5432,
     }
 }
+AUTH_USER_MODEL = 'backend.CustomUser'
 
+# Open ID login
+AUTHENTICATION_BACKENDS = (
+    'iart.oidc_authentication_backend.OIDCAB_USERNAME',
+    'django.contrib.auth.backends.ModelBackend'
+)
+OIDC_RP_CLIENT_ID = 'iart'
+OIDC_RP_CLIENT_SECRET = ''
+OIDC_OP_AUTHORIZATION_ENDPOINT = "https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/auth"
+OIDC_OP_TOKEN_ENDPOINT = "https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/token"
+OIDC_OP_USER_ENDPOINT = "https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/userinfo"
+OIDC_RP_SIGN_ALGO = "RS256"
+LOGIN_REDIRECT_URL = 'https://imagesearch.fid-bau.de'
+LOGOUT_REDIRECT_URL = 'https://imagesearch.fid-bau.de'
+OIDC_OP_JWKS_ENDPOINT = 'https://idm.ulb.tu-darmstadt.de/realms/fid-bau/protocol/openid-connect/certs'
+OIDC_AUTHENTICATION_CALLBACK_URL = 'oidc_callback'
+USE_X_FORWARDED_HOST = True
 
 # Password validation
 # https://docs.djangoproject.com/en/2.1/ref/settings/#auth-password-validators
@@ -154,6 +173,10 @@ LOGGING = {
         "backend.middleware": {
             "handlers": ["console"],
             "level": "DEBUG",
+        },
+        'mozilla_django_oidc': {
+            'handlers': ['console'],
+            'level': 'INFO'
         },
     },
 }
@@ -212,6 +235,7 @@ config_lut = {
     "grpc_port": "GRPC_PORT",
     "image_resolutions": "IMAGE_RESOLUTIONS",
     "image_ext": "IMAGE_EXT",
+    "oidc_rp_client_secret": "OIDC_RP_CLIENT_SECRET",
 }
 
 config_path = os.environ.get("IART_BACKEND_CONFIG")
