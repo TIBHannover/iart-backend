@@ -12,10 +12,12 @@ def media_url_to_preview(id):
 
 
 def upload_url_to_image(id):
+    print(f"{settings.UPLOAD_URL}{id[0:2]}/{id[2:4]}/{id}.{settings.IMAGE_EXT}")
     return f"{settings.UPLOAD_URL}{id[0:2]}/{id[2:4]}/{id}.{settings.IMAGE_EXT}"
 
 
 def upload_url_to_preview(id):
+    print(f"{settings.UPLOAD_URL}{id[0:2]}/{id[2:4]}/{id}_m.{settings.IMAGE_EXT}")
     return f"{settings.UPLOAD_URL}{id[0:2]}/{id[2:4]}/{id}_m.{settings.IMAGE_EXT}"
 
 
